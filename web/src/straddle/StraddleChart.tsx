@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createChart, PaneLegend, type Chart, type CrosshairMoveEvent, type LegendValue, type SeriesApi, type SeriesDataItem } from "openalgo-charts";
 
 import { priceAxisWidth, themeFromPage, token } from "../chart/chartTheme";
@@ -77,10 +77,10 @@ const EXTRA_WIDTH = 2;
 
 /** Legend rows, top to bottom, in the order the desk reads them: the premium first. */
 const READ_ORDER: LineId[] = ["straddle", "vwap", "fut", "spot", "iv", "vix"];
-const lineOf = (id: LineId) => LINES.find((l) => l.id === id)!;
+export const lineOf = (id: LineId) => LINES.find((l) => l.id === id)!;
 
 /** The legend's text, CSS px: TradingView's status line is a size up from its axes. */
-const LEGEND_FONT = 12;
+const LEGEND_FONT = 13;
 
 const STORE_KEY = "mh.straddle.hidden";
 
@@ -284,6 +284,7 @@ export function StraddleChart({
   onReachStart,
   onRetry,
   extras = [],
+  legend,
   onHover,
   live = false,
   showVix = true,
@@ -294,6 +295,8 @@ export function StraddleChart({
   live?: boolean;
   /** The straddles picked on the option chain: each a line beside the ATM one. */
   extras?: readonly StrikeLine[];
+  /** The price pane's status line, laid 4px inside its plot's top-left corner. */
+  legend?: ReactNode;
   /** The minute under the crosshair (epoch seconds), or null when it leaves: for the chips row. */
   onHover?: (time: number | null) => void;
   bars: readonly Bar[];
@@ -593,9 +596,33 @@ export function StraddleChart({
     return () => clearTimeout(timer);
   }, [history]);
 
+  // Where the price pane's plot is, so the status line sits inside it, past the left price axis,
+  // as the axis widens with its numbers and as the panel resizes.
+  const [plot, setPlot] = useState<{ left: number; top: number; width: number } | null>(null);
+  useEffect(() => {
+    const element = host.current;
+    if (!element) return;
+    const read = () => {
+      const r = chartRef.current?.plotRect(0) ?? null;
+      setPlot((was) => (!r ? null : was && was.left === r.left && was.top === r.top && was.width === r.width ? was : { left: r.left, top: r.top, width: r.width }));
+    };
+    const raf = requestAnimationFrame(read);
+    const ro = new ResizeObserver(() => requestAnimationFrame(read));
+    ro.observe(element);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [bars]);
+
   return (
     <div className="oa-chart-frame" ref={frame}>
       <div ref={host} className="oa-chart" aria-label="ATM straddle session: spot, synthetic future, ATM IV, India VIX, premium and its VWAP" />
+      {legend && plot ? (
+        <div className="mh-legend-anchor" style={{ left: plot.left + 4, top: plot.top + 4, width: plot.width - 8 }}>
+          {legend}
+        </div>
+      ) : null}
 
       {history === "loading" || history === "error" || (history === "exhausted" && endNote) ? (
         <div className={history === "error" ? "chart-history mh-error" : "chart-history"} role="status">

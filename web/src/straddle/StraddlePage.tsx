@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { dayLabel, fmt0, fmt2, istDate, nearestExpiry, pastWeekdays } from "../core/format";
+import { dayLabel, istDate, nearestExpiry, pastWeekdays } from "../core/format";
 import type { Hub } from "../hub/client";
 import type { Bar, StraddleSnapshot, StraddleUpdate, TopicMessage, Underlying } from "../hub/types";
 import { Dropdown } from "../ui/Dropdown";
-import { useFitRow, wraps } from "../ui/fitRow";
-import { AlertIcon, ChartIcon, CloseIcon, PlusIcon, Spinner } from "../ui/icons";
-import { openOf, percentMove, readingOf, sessionOpens, setFocus, StraddleChart, toggleLine, useHidden, type HistoryStatus, type LineId, type Move } from "./StraddleChart";
-import { ATM_COLOUR, MAX_STRADDLES } from "../desk/compare";
+import { AlertIcon, ChartIcon, PlusIcon, Spinner } from "../ui/icons";
+import { openOf, sessionOpens, StraddleChart, useHidden, type HistoryStatus } from "./StraddleChart";
+import { StraddleLegend } from "./StraddleLegend";
+import { MAX_STRADDLES } from "../desk/compare";
 import "./chips.css";
 import { picksFor, togglePick, useCompare } from "../desk/compare";
 import { useStrikeLines } from "./useStrikeLines";
@@ -381,20 +381,14 @@ export function StraddlePage({
   const picks = pick ? picksFor(compare, pick.underlying.id, pick.expiry) : [];
   const strikeLines = useStrikeLines(hub, pick?.underlying.id ?? "", pick?.expiry ?? "", closedDay || (pick?.day ?? "live"), bars, picks);
   const hiddenLines = useHidden();
-  const first = bars[0];
   const last = bars[bars.length - 1];
-  // The chips row reads its lines at the minute under the chart's crosshair, else the latest one,
+  // The legend reads its lines at the minute under the chart's crosshair, else the latest one,
   // each with its move since that minute's session opened.
   const [hoverTime, setHoverTime] = useState<number | null>(null);
-  // The strip's readouts and the chips row each stay on one line however long the name or the
-  // prices: measured, the least needed pieces give way first (`data-drop`, lowest rank first).
-  const fitStrip = useFitRow();
-  const fitChips = useFitRow(wraps);
   const byTime = useMemo(() => new Map(chartBars.map((b) => [Math.floor(b.t / 1000), b] as const)), [chartBars]);
   const opens = useMemo(() => sessionOpens(chartBars), [chartBars]);
   const shown = (hoverTime !== null ? byTime.get(hoverTime) : undefined) ?? last;
   const shownOpen = openOf(opens, shown);
-  const atm = readingOf("straddle", shown, shownOpen);
 
   const status = error ? (
     <span className="mh-hint mh-error" role="alert">
@@ -475,63 +469,6 @@ export function StraddlePage({
           <span className="mh-spacer" />
 
           {pick ? (
-            <div className="mh-readouts" ref={fitStrip}>
-              {status ??
-                (last ? (
-                  <>
-                    {/* In groups, a hairline between them: the ATM strike and its two legs, the
-                        straddle and its session average, then IV. Spot reads on the chips row.
-                        In the slimmest panel the straddle's move and then the ATM strike give way
-                        too (the chips row names that strike), so the straddle itself always fits. */}
-                    <span className="mh-readgroup" data-drop={5}>
-                      <Readout label="ATM" value={`${fmt0(last.strike)}${last.rolled ? " (rolled)" : ""}`} />
-                      <Readout drop={3} badge side="call" label="CE" value={fmt2(last.call)} title={`${fmt0(last.strike)} call`} />
-                      <Readout drop={3} badge side="put" label="PE" value={fmt2(last.put)} title={`${fmt0(last.strike)} put`} />
-                    </span>
-                    <span className="mh-readgroup">
-                      <Readout label="Straddle" value={fmt2(last.straddle)} change={first ? move(last.straddle, first.straddle) : null} changeDrop={4} />
-                      <Readout drop={2} label="Avg" value={last.vwap != null ? fmt2(last.vwap) : "—"} title="The straddle's average price this session (its VWAP)" />
-                    </span>
-                    <span className="mh-readgroup" data-drop={1}>
-                      <Readout label="IV" value={last.iv != null ? `${last.iv.toFixed(2)}%` : "—"} change={first?.iv != null && last.iv != null ? { text: `${signed(last.iv - first.iv)} pts`, tone: tone(last.iv - first.iv) } : null} />
-                    </span>
-                  </>
-                ) : null)}
-            </div>
-          ) : null}
-        </div>
-
-        {pick && bars.length > 0 ? (
-          <div className="mh-chips" role="toolbar" aria-label="Straddles on the chart" ref={fitChips}>
-            {/* Each chip reads its line at the minute under the crosshair, else the latest one. */}
-            <span
-              className="mh-chipbox"
-              data-main
-              onPointerEnter={() => setFocus("straddle")}
-              onPointerLeave={() => setFocus(null)}
-            >
-              <i style={{ background: ATM_COLOUR }} />
-              <span className="mh-chipbox-name">{shown ? fmt0(shown.strike) : "ATM"}</span>
-              <em>ATM</em>
-              <span style={{ color: ATM_COLOUR }}>{atm.value}</span>
-              <ChipMove move={atm.move} drop={3} />
-            </span>
-            {picks.map((p) => {
-              const line = strikeLines.find((l) => l.strike === p.strike);
-              const v = hoverTime !== null ? line?.byTime.get(hoverTime) ?? null : line?.last ?? null;
-              const from = line?.first ?? null;
-              return (
-                <span key={p.strike} className="mh-chipbox">
-                  <i style={{ background: p.colour }} />
-                  <span className="mh-chipbox-name">{fmt0(p.strike)}</span>
-                  <span style={{ color: p.colour }}>{v !== null ? fmt2(v) : "—"}</span>
-                  <ChipMove move={v !== null && from !== null && v !== from ? percentMove(v, from) : null} drop={1} />
-                  <button type="button" className="mh-chipbox-x" aria-label={`Remove the ${p.strike} straddle`} onClick={() => togglePick(pick.underlying.id, pick.expiry, p.strike)}>
-                    <CloseIcon size={10} />
-                  </button>
-                </span>
-              );
-            })}
             <button
               type="button"
               className="mh-chip-add"
@@ -540,47 +477,28 @@ export function StraddlePage({
             >
               <PlusIcon size={11} /> Add straddle <span>{1 + picks.length}/{MAX_STRADDLES}</span>
             </button>
-            {/* The line toggles as one group on the right: when the row runs out of room they move
-                to a line of their own together, never split one here and two there. */}
-            <span className="mh-overlays">
-              {(
-                [
-                  ["vwap", "VWAP", "--mh-line-vwap", ""],
-                  ["spot", "Spot", "--mh-line-spot", ""],
-                  ["fut", "Syn fut", "--mh-line-fut", ""],
-                ] as [LineId, string, string, string][]
-              ).map(([id, label, colour, dash]) => {
-                const r = readingOf(id, shown, shownOpen);
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className="mh-overlay"
-                    aria-pressed={!hiddenLines.has(id)}
-                    onClick={() => toggleLine(id)}
-                    onPointerEnter={() => setFocus(id)}
-                    onPointerLeave={() => setFocus(null)}
-                    onFocus={() => setFocus(id)}
-                    onBlur={() => setFocus(null)}
-                  >
-                    <svg width="14" height="4" viewBox="0 0 14 4" aria-hidden>
-                      <path d="M0 2h14" stroke={`var(${colour})`} strokeWidth="2" strokeDasharray={dash} />
-                    </svg>
-                    {label}
-                    <span className="mh-overlay-value" style={{ color: `var(${colour})` }} data-drop={2}>
-                      {r.value}
-                    </span>
-                    <ChipMove move={r.move} drop={1} />
-                  </button>
-                );
-              })}
-            </span>
-          </div>
-        ) : null}
+          ) : null}
+          {status ? <div className="mh-readouts">{status}</div> : null}
+        </div>
+
         <div className="mh-container-body">
           {pick && bars.length > 0 ? (
             <StraddleChart
               live={live && !closedDay}
+              legend={
+                <StraddleLegend
+                  name={`${pick.underlying.name} ${shortDate(pick.expiry)} straddle`}
+                  exchange={pick.underlying.id.split(":")[0]!.toUpperCase()}
+                  shown={shown}
+                  open={shownOpen}
+                  hidden={hiddenLines}
+                  picks={picks.map((p) => {
+                    const line = strikeLines.find((l) => l.strike === p.strike);
+                    return { strike: p.strike, colour: p.colour, value: hoverTime !== null ? line?.byTime.get(hoverTime) ?? null : line?.last ?? null, first: line?.first ?? null };
+                  })}
+                  onRemovePick={(strike) => togglePick(pick.underlying.id, pick.expiry, strike)}
+                />
+              }
               showVix={!pick.underlying.id.startsWith("mcx:")}
               bars={chartBars}
               viewKey={viewKey}
@@ -660,62 +578,3 @@ function daysTo(ymd: string): string {
   return days <= 0 ? "Today" : `${days}d`;
 }
 
-type Tone = "mh-up" | "mh-down" | "";
-const tone = (d: number): Tone => (d > 0 ? "mh-up" : d < 0 ? "mh-down" : "");
-const sign = (d: number) => (d > 0 ? "+" : d < 0 ? "−" : "");
-const signed = (d: number) => `${sign(d)}${fmt2(Math.abs(d))}`;
-
-/** A move since the session's first minute, as a percent. */
-function move(now: number, from: number): { text: string; tone: Tone } {
-  const pct = Number((from !== 0 ? ((now - from) / from) * 100 : 0).toFixed(2));
-  return { text: `${sign(pct)}${Math.abs(pct).toFixed(2)}%`, tone: tone(pct) };
-}
-
-/** A chip's move since its session opened, green up and red down; nothing when there is none yet. */
-function ChipMove({ move, drop }: Readonly<{ move: Move | null; drop?: number }>) {
-  if (!move) return null;
-  return (
-    <span className={`mh-chip-move ${move.dir > 0 ? "mh-up" : move.dir < 0 ? "mh-down" : ""}`} data-drop={drop}>
-      {move.text}
-    </span>
-  );
-}
-
-/**
- * One quiet readout on the strip: label one ink tier down, value, and its move since the open. A
- * `badge` label sits in a small plate, as the chips row marks "ATM": the CE and PE legs.
- */
-function Readout({
-  label,
-  value,
-  change,
-  className,
-  badge = false,
-  side,
-  title,
-  drop,
-  changeDrop,
-}: Readonly<{
-  label: string;
-  value: string;
-  change?: { text: string; tone: Tone } | null;
-  className?: string;
-  badge?: boolean;
-  side?: "call" | "put";
-  title?: string;
-  drop?: number;
-  /** The move alone gives way at this rank, the value staying. */
-  changeDrop?: number;
-}>) {
-  return (
-    <span className={className ? `mh-readout ${className}` : "mh-readout"} title={title} data-drop={drop} data-side={side}>
-      <span className={badge ? "mh-readout-label mh-readout-badge" : "mh-readout-label"}>{label}</span>
-      <span className="mh-readout-value">{value}</span>
-      {change ? (
-        <span className={`mh-readout-move ${change.tone}`} data-drop={changeDrop}>
-          {change.text}
-        </span>
-      ) : null}
-    </span>
-  );
-}

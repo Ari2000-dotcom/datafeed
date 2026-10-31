@@ -1,0 +1,119 @@
+/*
+ * The straddle chart's status line (StraddleLegend.tsx), measured off TradingView's own chart:
+ * rows 24px tall from 4px inside the plot's top-left corner; the instrument in 16px with a "·" in
+ * a 12px slot between its parts; readings and line rows in 13px, a label then its number, 6px
+ * between readings; numbers in their line's colour. A half-clear plate of the chart's ground
+ * keeps the text readable over the lines. A row's buttons are 28 x 24 and show only while the
+ * pointer is on the row.
+ */
+
+.mh-legend-anchor {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+}
+.mh-legend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  pointer-events: none;
+  color: var(--mh-text-strong);
+  font-size: 13px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.mh-legend-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-height: 24px;
+  pointer-events: auto;
+}
+
+.mh-legend-titles {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 4px 0 1px;
+  background: color-mix(in srgb, var(--mh-bg) 50%, transparent);
+}
+.mh-legend-title {
+  position: relative;
+  padding-left: 3px;
+}
+.mh-legend-main .mh-legend-title {
+  font-size: 16px;
+}
+.mh-legend-dot {
+  padding-left: 12px;
+}
+.mh-legend-dot::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  width: 12px;
+  text-align: center;
+}
+
+.mh-legend-values {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 24px;
+  padding-left: 4px;
+  background: color-mix(in srgb, var(--mh-bg) 50%, transparent);
+}
+.mh-legend-main .mh-legend-values {
+  padding-left: 8px;
+}
+.mh-legend-value {
+  padding-right: 6px;
+}
+.mh-legend-label {
+  padding-right: 2px;
+}
+
+/* A hidden line's row: its words and numbers at half strength, as TradingView dims a hidden study. */
+.mh-legend-row[data-hidden] .mh-legend-titles,
+.mh-legend-row[data-hidden] .mh-legend-values {
+  opacity: 0.5;
+}
+
+.mh-legend-buttons {
+  display: inline-flex;
+  height: 24px;
+  opacity: 0;
+  transition: opacity var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-legend-row:hover .mh-legend-buttons,
+.mh-legend-buttons:focus-within {
+  opacity: 1;
+}
+.mh-legend-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: var(--mh-bg);
+  color: var(--mh-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--mh-dur-fast) var(--mh-ease),
+    color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-legend-button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.mh-legend-button:hover {
+  background: var(--mh-surface-2);
+  color: var(--mh-text-strong);
+}
+.mh-legend-button:focus-visible {
+  outline: 2px solid var(--mh-focus);
+  outline-offset: -2px;
+}
