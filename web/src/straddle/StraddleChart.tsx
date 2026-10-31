@@ -368,8 +368,10 @@ export function StraddleChart({
           // The name in the box beside its axis tag.
           title: line.tag,
           priceLineVisible: line.priceLine,
-          // The latest value as a tag in the line's colour on its own axis, TradingView's way.
+          // The latest value as a tag in the line's colour on its own axis, TradingView's way; scrolled
+          // back, the value where the line leaves the plot, so every line is still labelled.
           lastValueVisible: true,
+          lastValueFollowsView: true,
           // The VWAP restarts every session: no line from one day's last value up or down to the
           // next day's first, as TradingView draws a session VWAP.
           sessionBreaks: line.id === "vwap",
@@ -533,7 +535,7 @@ export function StraddleChart({
           paneIndex: 0,
           priceScaleId: "left",
           priceFormat: { type: "custom", formatter: fmt2 },
-          style: { color: e.colour, lineWidth: EXTRA_WIDTH, title: fmt0(e.strike), priceLineVisible: false, lastValueVisible: true, visible: true },
+          style: { color: e.colour, lineWidth: EXTRA_WIDTH, title: fmt0(e.strike), priceLineVisible: false, lastValueVisible: true, lastValueFollowsView: true, visible: true },
         });
         extraRef.current.set(e.strike, series);
       }

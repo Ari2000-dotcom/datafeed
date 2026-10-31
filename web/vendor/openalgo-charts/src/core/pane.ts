@@ -33,7 +33,7 @@
 import { CanvasLayer, hairlineHeight, separatorIsBorder } from './canvas';
 import { PriceScale } from '../scale/price-scale';
 import { type TimeScale } from '../scale/time-scale';
-import { barAtIndex, visibleSpan, type DataLayer, type VisibleSpan } from '../model/data-layer';
+import { barAtIndex, visibleSpan, type DataLayer, type IndexedBar, type SeriesId, type VisibleSpan } from '../model/data-layer';
 import type { SeriesRecord, PriceScaleId } from '../model/series';
 import type { PriceScaleState } from '../model/chart-state';
 import { PriceAxisLayout, isPriceScaleId, type PriceAxisPlacement, type PriceAxisSide, type PriceAxisSlot } from '../model/price-axis-layout';
@@ -1304,7 +1304,8 @@ export class Pane {
       const rc: SeriesRenderContext = { plotHeight: layout.plotHeight, maxVolume, theme: ctx.theme };
       if (target === undefined) this._backend.drawSeries(entry, items, priceToY, drawSpacing, dpr, s.style, rc);
       else entry.draw(g, items, priceToY, drawSpacing, dpr, s.style, rc);
-      const last = ctx.dataLayer.lastIndexedBar(s.dataId);
+      let last = ctx.dataLayer.lastIndexedBar(s.dataId);
+      if (last !== null && s.style.lastValueFollowsView === true && last.index + shift > range.to) last = lastBarInView(ctx.dataLayer, s.dataId, range.from - shift, range.to - shift);
       if (last !== null) {
         const color = seriesTagColor(s.style, last.bar.close >= last.bar.open);
         if (s === instrument && lastEntry === null) {
@@ -1581,4 +1582,17 @@ export class Pane {
   public yToPrice(y: number): number {
     return this._readoutScale().yToPrice(y);
   }
+}
+
+/**
+ * MarketHub fork: the right-most bar of a series at or left of logical index `to` that holds a
+ * number, not before `from`; null when the view holds none. `lastValueFollowsView` reads it.
+ */
+function lastBarInView(layer: DataLayer, id: SeriesId, from: number, to: number): IndexedBar | null {
+  const stop = Math.max(Math.ceil(from), Math.floor(to) - 2000);
+  for (let index = Math.floor(to); index >= stop; index--) {
+    const bar = barAtIndex(layer, id, index);
+    if (bar !== undefined && Number.isFinite(bar.close)) return { index, bar };
+  }
+  return null;
 }

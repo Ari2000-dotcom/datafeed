@@ -56,6 +56,12 @@ export interface SeriesStyle {
    */
   lastValueVisible?: boolean;
   /**
+   * MarketHub fork: while the latest bar is scrolled out of view to the right, the value tag and
+   * its price line read the last bar in view instead, so a chart scrolled back still labels each
+   * line where it leaves the plot. Back at the latest bar they read the latest again.
+   */
+  lastValueFollowsView?: boolean;
+  /**
    * Decimal places for every price the scale this series maps to formats: the
    * axis ticks, the last-value tag, the crosshair label and the drawing-tool
    * labels. It overrides the precision the price scale infers from the tick
