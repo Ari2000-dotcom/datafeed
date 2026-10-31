@@ -160,17 +160,19 @@ function tint(colour: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-/** The share of the price pane's height that the spot and synthetic lines fill, centred. */
-const SPOT_BAND = 0.4;
-/** The least span, in index points, the band stands for: a quiet stretch is not blown up to fill it. */
-const SPOT_MIN_SPAN = 40;
+/**
+ * The share of the price pane's height that the spot and synthetic lines fill, centred: the same
+ * band the premium's own scale fills (its 10% margins top and bottom), so the two curves are drawn
+ * at one size and overlay each other instead of one being squeezed flat beside the other.
+ */
+const SPOT_BAND = 0.8;
+/** The least span the band stands for, as a share of the price: a flat stretch is not blown up. */
+const SPOT_MIN_SPAN = 0.0005;
 
 /**
- * Spot and the synthetic future share the price pane's right scale, and are kept in the middle of
- * the pane: the premium fills the pane on its own scale, and these two read as a band across its
- * middle, so both are seen whole at a glance. The scale is set from the minutes in view, centred
- * and never more than SPOT_BAND of the height, so it neither stretches every wiggle of the index
- * across the pane nor squeezes it flat when an earlier, wider session is scrolled into view.
+ * Spot and the synthetic future share the price pane's right scale, fitted to the minutes in view
+ * and centred, as the premium is on its left scale. Scrolling or zooming refits both, so neither
+ * line drifts off the top or bottom of the pane while the other sits in the middle.
  */
 function fitSpot(chart: Chart, series: ReadonlyMap<LineId, SeriesApi>, bars: readonly Bar[]) {
   const scale = series.get("fut")?.priceScale();
@@ -190,7 +192,7 @@ function fitSpot(chart: Chart, series: ReadonlyMap<LineId, SeriesApi>, bars: rea
   }
   if (lo > hi) return;
   const mid = (lo + hi) / 2;
-  const half = Math.max(hi - lo, SPOT_MIN_SPAN) / SPOT_BAND / 2;
+  const half = Math.max(hi - lo, mid * SPOT_MIN_SPAN) / SPOT_BAND / 2;
   scale.setOptions({ marginTop: 0, marginBottom: 0 });
   scale.setFixedRange({ min: mid - half, max: mid + half });
 }
