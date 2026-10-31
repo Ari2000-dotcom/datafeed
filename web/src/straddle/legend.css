@@ -1,6 +1,6 @@
 /*
  * The straddle chart's status line (StraddleLegend.tsx), measured off TradingView's own chart and
- * sized to the plot it sits on: from 4px inside the plot's top-left corner, the instrument in
+ * sized to the plot it sits on: 8px in from the plot's left edge and 6px down from its top, the instrument in
  * capitals a step larger than its readings, with a "·" in a 12px slot (10px on slim plots)
  * between its parts; 6px between readings; 2px between rows; words in TradingView's #dbdbdb, figures tabular so a
  * reading does not shift as the crosshair moves. TradingView's 16 / 13 at 24px rows is for its

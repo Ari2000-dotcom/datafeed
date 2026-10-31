@@ -619,7 +619,7 @@ export function StraddleChart({
     <div className="oa-chart-frame" ref={frame}>
       <div ref={host} className="oa-chart" aria-label="ATM straddle session: spot, synthetic future, ATM IV, India VIX, premium and its VWAP" />
       {legend && plot ? (
-        <div className="mh-legend-anchor" style={{ left: plot.left + 4, top: plot.top + 4, width: plot.width - 8 }}>
+        <div className="mh-legend-anchor" style={{ left: plot.left + 8, top: plot.top + 6, width: plot.width - 16 }}>
           {legend}
         </div>
       ) : null}

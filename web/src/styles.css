@@ -352,9 +352,10 @@ input {
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 2px;
+  /* Room at both ends and between controls: the strip is read at a glance, not squinted at. */
+  gap: 4px;
   min-height: var(--mh-strip-h);
-  padding: 0 6px 0 4px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--mh-strip-edge);
 }
 
@@ -436,7 +437,7 @@ input {
   flex: 0 0 auto;
   width: 1px;
   height: 18px;
-  margin: 0 4px;
+  margin: 0 8px;
   background: var(--mh-line-strong);
 }
 

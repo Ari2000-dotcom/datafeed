@@ -99,7 +99,7 @@
   display: flex;
   align-items: center;
   height: var(--mh-dock-tab-h);
-  padding: 0 4px 0 10px;
+  padding: 0 6px 0 12px;
   font-size: var(--mh-size-caption);
   font-weight: var(--mh-weight-regular);
   cursor: pointer;
@@ -186,9 +186,13 @@
 .mh-header-split {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   height: 100%;
   padding: 0 4px;
+}
+/* The container's buttons end 8px in from its edge, as the strip starts 12px in from the other. */
+.mh-header-split {
+  padding-right: 8px;
   opacity: 1;
   transition: opacity var(--mh-dur-fast) var(--mh-ease);
 }

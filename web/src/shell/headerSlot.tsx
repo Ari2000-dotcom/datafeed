@@ -12,6 +12,11 @@ import type { IDockviewHeaderActionsProps, IDockviewPanelProps } from "dockview"
  * keeps its tabs, and each panel its strip inline.
  */
 
+/**
+ * Each slot belongs to the one panel its container holds, by the panel's id: a panel looks up its
+ * own id, never its container's, so a panel moved out of a container (or one mounted in the
+ * background of another) can never land its strip in a header that is not its own.
+ */
 const slots = new Map<string, HTMLElement>();
 const listeners = new Set<() => void>();
 let version = 0;
@@ -38,17 +43,18 @@ export function HeaderSlot({ group, panels }: IDockviewHeaderActionsProps) {
     ro.observe(group.element);
     return () => ro.disconnect();
   }, [group]);
-  const single = panels.length === 1 && wide;
+  const owner = panels.length === 1 && wide ? panels[0]!.id : null;
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (!single || !element) return;
-    slots.set(group.id, element);
+    if (!owner || !element) return;
+    slots.set(owner, element);
     changed();
     return () => {
-      if (slots.get(group.id) === element) slots.delete(group.id);
+      if (slots.get(owner) === element) slots.delete(owner);
       changed();
     };
-  }, [single, element, group.id]);
+  }, [owner, element]);
+  const single = owner !== null;
   return single ? <div ref={setElement} className="mh-header-slot" /> : null;
 }
 
@@ -58,16 +64,9 @@ const SlotContext = createContext<HTMLElement | null>(null);
 export function withHeaderSlot<T extends object>(Panel: FunctionComponent<IDockviewPanelProps<T>>): FunctionComponent<IDockviewPanelProps<T>> {
   function Slotted(props: IDockviewPanelProps<T>) {
     const { api } = props;
-    // The container a panel is in changes when it is dragged to another one.
-    const [groupId, setGroupId] = useState(api.group.id);
-    useEffect(() => {
-      setGroupId(api.group.id);
-      const subscription = api.onDidGroupChange(() => setGroupId(api.group.id));
-      return () => subscription.dispose();
-    }, [api]);
     useSyncExternalStore(subscribe, () => version);
     return (
-      <SlotContext.Provider value={slots.get(groupId) ?? null}>
+      <SlotContext.Provider value={slots.get(api.id) ?? null}>
         <Panel {...props} />
       </SlotContext.Provider>
     );

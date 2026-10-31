@@ -8,10 +8,10 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex: none;
   height: var(--mh-strip-h);
-  padding: 0 8px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--mh-line);
   container-type: inline-size;
 }
