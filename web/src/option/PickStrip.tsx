@@ -6,7 +6,8 @@ import type { Underlying } from "../hub/types";
 import { freshPick, PICK_EVENT, readPick, type Pick } from "../straddle/StraddlePage";
 import { Dropdown } from "../ui/Dropdown";
 import { CloseIcon, SearchIcon } from "../ui/icons";
-import "./pick.css";
+import "./pick.css";
+import { PanelHeader } from "../shell/headerSlot";
 
 /**
  * The strip every option panel opens with (the chain's, and the delta x OI panel's): a search box
@@ -146,7 +147,7 @@ export function PickStrip({
   const exchange = pick ? pick.underlying.id.split(":")[0]!.toUpperCase() : "";
 
   return (
-    <div className="mh-pick-strip">
+    <PanelHeader className="mh-pick-strip">
       <div className="mh-pick-find" data-has-pick={pick ? "" : undefined} onClick={() => input.current?.focus()}>
         <SearchIcon size={14} />
         <input
@@ -232,6 +233,6 @@ export function PickStrip({
         </span>
       ) : null}
       {children}
-    </div>
+    </PanelHeader>
   );
 }

@@ -107,9 +107,10 @@
   color-scheme: dark;
   /* -- the desk (theme/dock.css): the dock's measures and its accent ----------------- */
   --mh-dock-tab-h: 28px;
-  /* A gap of workspace between containers, and a card's corner. */
-  --mh-dock-gutter: 6px;
-  --mh-dock-radius: 8px;
+  /* Containers meet edge to edge with a hairline of workspace between them, square, as
+     TradingView splits its panes: the room goes to the data, not to the frame. */
+  --mh-dock-gutter: 1px;
+  --mh-dock-radius: 0px;
   /* The one accent: TradingView's blue. Fills, rules and rings use it as is; text in it uses the
      lighter shade, which holds 5:1 on every ground. */
   --mh-accent: #2962ff;
@@ -202,7 +203,7 @@
   --mh-radius-card: 10px;
   --mh-radius-pill: 980px;
   --mh-control-h: 28px;
-  --mh-titlebar-h: 48px;
+  --mh-titlebar-h: 38px;
 
   /* -- motion ------------------------------------------------------------ */
   --mh-ease: cubic-bezier(0.4, 0, 0.6, 1);

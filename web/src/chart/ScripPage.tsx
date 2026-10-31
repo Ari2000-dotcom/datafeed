@@ -38,7 +38,8 @@ import { useOiProfile, type OiProfileMode } from "./useOiProfile";
 import { ScripChart, type LiveTick } from "./ScripChart";
 import { CANDLE_PALETTES, paletteColors, useCandlePalette } from "./candlePalette";
 import { CHART_TYPES, isLineType, useChartType, type ScripChartType } from "./chartType";
-import { INDICATORS, useIndicators } from "./indicators";
+import { INDICATORS, useIndicators } from "./indicators";
+import { PanelHeader } from "../shell/headerSlot";
 
 /**
  * Pick any NSE/BSE index or MCX commodity and an interval: its candles on openalgo-charts, price
@@ -223,7 +224,7 @@ export function ScripPage({
   return (
     <div className="mh-page">
       <section className="mh-container" aria-label="Scrip chart">
-        <div className="mh-strip mh-tv-strip">
+        <PanelHeader className="mh-strip mh-tv-strip">
           <Dropdown
             label="Underlying"
             caption={false}
@@ -355,7 +356,7 @@ export function ScripPage({
               </span>
             </div>
           ) : null}
-        </div>
+        </PanelHeader>
         <div className="mh-container-body">
           {id && candles.length > 0 ? (
             <ScripChart

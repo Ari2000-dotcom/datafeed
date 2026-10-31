@@ -279,3 +279,13 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* The straddle strip in its panel (not lifted into the header): when the pickers leave the
+   readouts less room than their spot and straddle need, the readouts take a line of their own
+   rather than being cut. In the header (a wide panel only) the strip stays one line. */
+.mh-strip:has(> .mh-straddle-box):not(.mh-in-header) {
+  flex-wrap: wrap;
+}
+.mh-strip:has(> .mh-straddle-box):not(.mh-in-header) > .mh-readouts {
+  flex: 1 0 200px;
+}

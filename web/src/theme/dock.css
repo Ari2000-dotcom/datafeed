@@ -1,13 +1,15 @@
 /*
- * The desk, dressed as AlphaHedge's plates (its "Workspace and plates", on dockview's own
- * elements): a container lifts off the workspace by TONE ALONE — no border, no shadow, a
- * card's corner, and a gap of workspace between two plates. Three grounds: the workspace in
- * the gutters, each container's plate (`--mh-bg`), and the tab strip over it, transparent so
- * the gutter shows past the tabs.
+ * The desk, TradingView's way: containers meet edge to edge with a hairline of workspace between
+ * them, square, no shadow; the room goes to the data. Layering is by tone, not by space: each
+ * container's header a step lighter than its plate (`--mh-head`), the plate the chart's ground,
+ * menus floating over both.
  *
- * The focused container is the one with the blue frame: its plate and its active tab are edged in
- * the accent blue (`--mh-dock-accent`, also a drop target's), the
- * rest stay frameless, so which one takes the keys is plain at a glance.
+ * A container holding one panel has one header line: the panel's own strip, lifted into the
+ * dock's header (shell/headerSlot.tsx), with the drag grip and the container's buttons at its
+ * end. A container holding several keeps its tab row.
+ *
+ * The focused container is marked by a 2px accent line along its header's top edge, the rest
+ * unmarked, so which one takes the keys is plain at a glance without framing every container.
  */
 
 .mh-dock {
@@ -61,9 +63,20 @@
   contain: layout paint;
   transition: border-color var(--mh-dur) var(--mh-ease);
 }
-/* The focused container's frame: a blue edge. */
-.mh-dock .dv-groupview.dv-active-group > .dv-content-container {
-  border-color: var(--mh-dock-accent);
+/* The focused container: an accent line along the top of its header. */
+.mh-dock .dv-groupview > .dv-tabs-and-actions-container::before {
+  content: "";
+  position: absolute;
+  /* Over the strip lifted into the header, which stacks at 5 for its menus' sake. */
+  z-index: 6;
+  inset: 0 0 auto;
+  height: 2px;
+  background: transparent;
+  pointer-events: none;
+  transition: background-color var(--mh-dur) var(--mh-ease);
+}
+.mh-dock .dv-groupview.dv-active-group > .dv-tabs-and-actions-container::before {
+  background: var(--mh-dock-accent);
 }
 
 /* -- the tab strip -------------------------------------------------------------------------- */
@@ -75,7 +88,7 @@
   min-height: var(--mh-dock-tab-h);
   max-width: 100%;
   margin-bottom: -1px;
-  background: transparent;
+  background: var(--mh-head);
 }
 .mh-dock .dv-tabs-and-actions-container .dv-tabs-container {
   scrollbar-width: none;
@@ -97,14 +110,7 @@
   border-top-left-radius: var(--mh-dock-radius);
   border-top-right-radius: var(--mh-dock-radius);
 }
-/* The focused container: its active tab carries the blue frame's top edge, open at the bottom
-   so the frame runs on unbroken into the plate under it (below). */
-.mh-dock .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
-  box-shadow:
-    inset 0 1px 0 var(--mh-dock-accent),
-    inset 1px 0 0 var(--mh-dock-accent),
-    inset -1px 0 0 var(--mh-dock-accent);
-}
+
 /* Pointing at a tab that is not the active one lifts it toward the active tab: strong text and an
    edge in grey, with no fill at all, so the ground behind shows through.
    The long selector is to outrank the library's own tab colours, which a group's state sets. */
@@ -222,11 +228,12 @@
   content: "";
   position: absolute;
 }
+/* The hairline is too thin to grab: the splitter takes 3px either side of it. */
 .mh-dock .dv-horizontal > .dv-sash-container > .dv-sash::before {
-  inset: 0 calc(-1 * var(--mh-dock-gutter));
+  inset: 0 -3px;
 }
 .mh-dock .dv-vertical > .dv-sash-container > .dv-sash::before {
-  inset: calc(-1 * var(--mh-dock-gutter)) 0;
+  inset: -3px 0;
 }
 /* Resizing shows no line: the divider stays invisible under the pointer, the cursor says where it is. */
 .mh-dock .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:hover,
@@ -283,4 +290,54 @@
 .mh-dock-btn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* -- one header line: a single panel's strip in its container's header -------------------------- */
+
+.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) {
+  height: var(--mh-strip-h);
+  min-height: var(--mh-strip-h);
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--mh-strip-edge);
+}
+.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) > .dv-tabs-container {
+  display: none;
+}
+.mh-dock .dv-tabs-and-actions-container > .dv-pre-actions-container:has(.mh-header-slot:not(:empty)) {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The container's own buttons keep their room: the strip is what gives way, by its own rules. */
+.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) > :is(.dv-left-actions-container, .dv-right-actions-container) {
+  flex: none;
+}
+.mh-header-slot {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+/* The strip as the header: the header draws the rule under it, and its ground is the header's. */
+.mh-header-slot > .mh-in-header {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+/* Its drag grip: the header's empty part, a short dotted column before the container's buttons. */
+.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) > .dv-void-container {
+  flex: 0 0 12px;
+  background-image: radial-gradient(circle, var(--mh-text-disabled) 1px, transparent 1.2px);
+  background-size: 4px 4px;
+  background-position: center;
+  background-repeat: repeat-y;
+  background-clip: content-box;
+  padding: 10px 4px;
+  box-sizing: border-box;
+}
+.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)):hover > :is(.dv-left-actions-container, .dv-void-container, .dv-right-actions-container) {
+  background-color: transparent;
 }

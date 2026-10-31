@@ -17,6 +17,7 @@ import { useStrikeLines } from "./useStrikeLines";
 import { dropSummary, publishSummary } from "../desk/summary";
 import { defaultUnderlying } from "../core/defaultUnderlying";
 import { useUniverse } from "../core/universe";
+import { PanelHeader } from "../shell/headerSlot";
 
 /**
  * Pick an underlying (any NSE, BSE or MCX name with options), an expiry, and
@@ -428,7 +429,7 @@ export function StraddlePage({
       <section className="mh-container" aria-label="ATM straddle">
         {/* The container's one header strip, QuantDesk's way: what is drawn on the left (the
             underlying, its expiry, the session), quiet readouts of the latest minute on the right. */}
-        <div className="mh-strip">
+        <PanelHeader className="mh-strip">
           <Dropdown
             label="Underlying"
             caption={false}
@@ -560,7 +561,7 @@ export function StraddlePage({
                 ) : null)}
             </div>
           ) : null}
-        </div>
+        </PanelHeader>
 
         <div className="mh-container-body">
           {pick && bars.length > 0 ? (

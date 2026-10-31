@@ -6,7 +6,8 @@ import type { Hub } from "../hub/client";
 import type { TopicMessage } from "../hub/types";
 import { MAX_STRADDLES, ATM_COLOUR, picksFor, useCompare } from "./compare";
 import { useSummaries, type Summary } from "./summary";
-import "./panels.css";
+import "./panels.css";
+import { PanelHeader } from "../shell/headerSlot";
 
 const sign = (v: number, digits: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(digits)}`;
 const tone = (v: number) => (v > 0 ? "mh-up" : v < 0 ? "mh-down" : "");
@@ -42,13 +43,13 @@ export function TablePanel() {
   const rows = useSummaries();
   return (
     <div className="mh-table-panel">
-      <div className="mh-table-head">
+      <PanelHeader className="mh-table-head">
         <span className="mh-table-title">
           Straddles <span>{rows.length}</span>
         </span>
         <span className="mh-spacer" />
         <span className="mh-table-note">One update a second</span>
-      </div>
+      </PanelHeader>
       <div className="mh-table-scroll">
         {rows.length === 0 ? (
           <div className="mh-empty">

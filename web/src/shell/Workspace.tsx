@@ -18,6 +18,7 @@ import { ChainPanel } from "../option/ChainPanel";
 import { ScripPage, type ScripPick } from "../chart/ScripPage";
 import { ChartIcon, ChevronDownIcon, CloseIcon, MaximizeIcon, PlusIcon, RestoreIcon, SplitDownIcon, SplitRightIcon, TableIcon } from "../ui/icons";
 import { Popover } from "../ui/Popover";
+import { HeaderSlot, withHeaderSlot } from "./headerSlot";
 
 /**
  * The desk, QuantDesk's way (its `shell/Workspace.tsx`, on the same dockview): containers with a
@@ -173,7 +174,15 @@ function ScripDockPanel({ api, params }: IDockviewPanelProps<ScripParams>) {
   );
 }
 
-const COMPONENTS = { straddle: StraddlePanel, chain: ChainDockPanel, table: TableDockPanel, details: DetailsDockPanel, deltaoi: DeltaOiDockPanel, scrip: ScripDockPanel };
+// Each panel can lift its strip into its container's header when it is the container's only one.
+const COMPONENTS = {
+  straddle: withHeaderSlot(StraddlePanel),
+  chain: withHeaderSlot(ChainDockPanel),
+  table: withHeaderSlot(TableDockPanel),
+  details: withHeaderSlot(DetailsDockPanel),
+  deltaoi: withHeaderSlot(DeltaOiDockPanel),
+  scrip: withHeaderSlot(ScripDockPanel),
+};
 
 /* -- a tab: icon, title, a close button that shows on hover ----------------------------------- */
 
@@ -713,6 +722,7 @@ export function Workspace({ hub, themeKey, onApi }: Readonly<{ hub: Hub; themeKe
         <DockviewReact
           components={COMPONENTS}
           defaultTabComponent={DeskTab}
+          prefixHeaderActionsComponent={HeaderSlot}
           leftHeaderActionsComponent={HeaderAdd}
           rightHeaderActionsComponent={HeaderSplit}
           onReady={ready}
