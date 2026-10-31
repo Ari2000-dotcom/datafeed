@@ -10,6 +10,7 @@ import { OiProfileBars, type OiBarLevel } from "./OiProfileBars";
 import { PaneGrip } from "./PaneGrip";
 import type { OiProfileData, OiProfileMode } from "./useOiProfile";
 import { useChartPixelSnap } from "./useChartPixelSnap";
+import { ScripLegend, type ScripLegendRow } from "./ScripLegend";
 
 /** A live trade: its price and the hub's timestamp, ms. */
 export interface LiveTick {
@@ -104,6 +105,9 @@ export function ScripChart({
   stepSec,
   onAtr,
   name,
+  exchange,
+  intervalLabel,
+  onRemoveIndicator,
   colors,
   oiProfile,
   oiMode,
@@ -122,8 +126,13 @@ export function ScripChart({
   stepSec: number;
   /** The latest ATR on the candles including the forming one, as it moves with each tick. */
   onAtr?: (value: number | null) => void;
-  /** The instrument's name, in a box beside its price tag. */
+  /** The instrument's name, in a box beside its price tag and on the legend. */
   name: string;
+  /** The exchange ("NSE", "MCX") and the interval's short form ("5", "1h", "1D"), on the legend. */
+  exchange: string;
+  intervalLabel: string;
+  /** The legend's remove button on an indicator's row. */
+  onRemoveIndicator: (id: IndicatorId) => void;
   colors: { up: string; down: string };
   /** Null hides the profile. */
   oiProfile: OiProfileData | null;
@@ -154,6 +163,16 @@ export function ScripChart({
    *  every other line on the chart has. */
   const atpRef = useRef<SeriesApi | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; price: number } | null>(null);
+  /** The candle under the crosshair (its time), or null for the latest: the legend reads it. */
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  /** Bumped once a frame as ticks move the candles, so the legend reads them fresh. */
+  const [, setLiveVersion] = useState(0);
+  /** The indicators hidden from the legend's eye: still listed, not drawn. */
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
+  /** The ATP level as drawn (its name, "ATP" or "Avg", and price), for the legend. */
+  const atpShown = useRef<{ name: string; price: number } | null>(null);
 
   useChartPixelSnap(frame, host);
 
@@ -228,6 +247,7 @@ export function ScripChart({
     // The OI tooltip: only while the pointer is over a strike's bars on the price pane.
     const unsubscribe = chart.subscribeCrosshairMove((e) => {
       hoverAt.current = e.time ?? null;
+      setHoverTime(e.time ?? null);
       showLegends();
       const level = e.point && e.paneIndex === 0 && !e.pressed ? oiBarsRef.current?.levelAt(e.point.x, e.point.y) ?? null : null;
       // The strike, not a copy of its figures: the tooltip reads them fresh as the profile updates.
@@ -244,6 +264,7 @@ export function ScripChart({
       legendRef.current.clear();
       readings.current.clear();
       atpRef.current = null;
+      atpShown.current = null;
       oiBarsRef.current = null;
       shownKey.current = "";
       forming.current = null;
@@ -295,7 +316,6 @@ export function ScripChart({
   };
   /** Takes in points (all of them, or the last few that moved) as the legend's readings. */
   const takeReadings = (id: IndicatorId, points: readonly { time: number; value?: number }[]) => {
-    if (!legendRef.current.has(id)) return;
     const held = readings.current.get(id) ?? { byTime: new Map<number, number>(), last: null };
     for (const p of points) {
       if (typeof p.value === "number" && Number.isFinite(p.value)) {
@@ -316,6 +336,7 @@ export function ScripChart({
       takeReadings(id, tail);
     }
     showLegends();
+    setLiveVersion((v) => v + 1);
     if (onAtr) {
       const last = atrPoints(held, ATR_PERIOD).at(-1);
       onAtr(last && "value" in last ? last.value : null);
@@ -366,6 +387,7 @@ export function ScripChart({
           title: def.name,
           sessionBreaks: def.id === "avg",
           priceLineVisible: false,
+          visible: !hiddenRef.current.has(def.id),
           // Every line's value on the axis, in its colour with its name beside it, TradingView's way.
           lastValueVisible: true,
         },
@@ -431,15 +453,17 @@ export function ScripChart({
     if (price === null || at === undefined) {
       atpRef.current?.remove();
       atpRef.current = null;
+      atpShown.current = null;
       return;
     }
+    atpShown.current = { name, price };
     const color = token("--mh-amber");
     if (!atpRef.current) {
       atpRef.current = chart.addSeries("line", {
         paneIndex: 0,
         priceScaleId: "right",
         priceFormat: { type: "custom", formatter: fmt2 },
-        style: { color, lineWidth: 1, title: name, lastValueVisible: true, priceLineVisible: true },
+        style: { color, lineWidth: 1, title: name, lastValueVisible: true, priceLineVisible: true, visible: !hiddenRef.current.has("atp") },
       });
     } else {
       atpRef.current.applyOptions({ color, title: name });
@@ -496,6 +520,55 @@ export function ScripChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [themeKey, colors.up, colors.down]);
 
+  /* -- the legend's eye: a hidden indicator stays listed and is not drawn ----------------------- */
+  useEffect(() => {
+    for (const [id, series] of linesRef.current) series.applyOptions({ visible: !hidden.has(id) });
+    atpRef.current?.applyOptions({ visible: !hidden.has("atp") });
+  }, [hidden]);
+  const toggleHidden = (id: string) =>
+    setHidden((was) => {
+      const next = new Set(was);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // The legend's candle: the one under the crosshair, else the latest, and the one before it.
+  const held = bars.current.length > 0 ? bars.current : candles;
+  const at = hoverTime === null ? held.length - 1 : indexAt(held, hoverTime);
+  const shownBar = at >= 0 ? held[at] : undefined;
+  const legendRows: ScripLegendRow[] = [];
+  for (const def of INDICATORS) {
+    if (!indicators.includes(def.id) || def.place === "pane") continue;
+    if (def.place === "level") {
+      const a = atpShown.current;
+      if (a) legendRows.push({ id: def.id, name: a.name, colour: token("--mh-amber"), value: a.price, hidden: hidden.has(def.id) });
+      continue;
+    }
+    const r = readings.current.get(def.id);
+    const value = shownBar ? (r?.byTime.get(shownBar.time) ?? null) : (r?.last ?? null);
+    legendRows.push({ id: def.id, name: def.name, colour: lineColor(def.color), value, hidden: hidden.has(def.id) });
+  }
+
+  // Where the price pane's plot is, so the legend sits inside it, clear of the price axis, as the
+  // axis widens with its numbers and as the panel resizes.
+  const [plot, setPlot] = useState<{ left: number; top: number; width: number } | null>(null);
+  useEffect(() => {
+    const element = host.current;
+    if (!element) return;
+    const read = () => {
+      const r = chartRef.current?.plotRect(0) ?? null;
+      setPlot((was) => (!r ? null : was && was.left === r.left && was.top === r.top && was.width === r.width ? was : { left: r.left, top: r.top, width: r.width }));
+    };
+    const raf = requestAnimationFrame(read);
+    const ro = new ResizeObserver(() => requestAnimationFrame(read));
+    ro.observe(element);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [candles, indicatorKey]);
+
   // The hovered strike's figures as they are now, so a still pointer sees them move.
   const tipLevel = useMemo<OiBarLevel | null>(() => {
     if (!tip || !oiProfile) return null;
@@ -506,9 +579,41 @@ export function ScripChart({
   return (
     <div className="oa-chart-frame" ref={frame}>
       <div ref={host} className="oa-chart" aria-label="Price chart with indicators" />
+      {plot ? (
+        <div className="mh-legend-anchor" style={{ left: plot.left + 8, top: plot.top + 6, width: plot.width - 16 }}>
+          <ScripLegend
+            name={name}
+            interval={intervalLabel}
+            exchange={exchange}
+            trading={trading}
+            bar={shownBar}
+            prev={at > 0 ? held[at - 1] : undefined}
+            line={isLineType(chartType)}
+            colors={colors}
+            rows={legendRows}
+            onToggle={toggleHidden}
+            onRemove={(id) => onRemoveIndicator(id as IndicatorId)}
+          />
+        </div>
+      ) : null}
       {tipLevel && tip ? <OiTip x={tip.x} y={tip.y} level={tipLevel} colors={colors} unit={oiUnit} mode={oiMode} /> : null}
     </div>
   );
+}
+
+/** The index of the candle at `time` (epoch seconds), else the last one before it; -1 if none. */
+function indexAt(bars: readonly OaBar[], time: number): number {
+  let lo = 0;
+  let hi = bars.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (bars[mid]!.time <= time) {
+      found = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  return found;
 }
 
 const signed = (v: number) => (Number.isFinite(v) ? `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmt0(Math.abs(v))}` : "—");

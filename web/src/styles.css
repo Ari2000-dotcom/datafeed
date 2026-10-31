@@ -817,83 +817,44 @@ input {
   margin-left: 0;
 }
 
-/* -- the interval: favourites on the strip, every interval in a menu (chart/IntervalPicker) -- */
+/* -- the interval: one button with the current interval, every interval in its menu (chart/IntervalPicker) -- */
 
-.mh-intervals {
+.mh-interval-trigger {
   display: inline-flex;
   align-items: center;
-  flex: 0 0 auto;
-  margin: 0 2px;
-}
-.mh-interval,
-.mh-interval-more {
-  display: inline-grid;
-  place-items: center;
-  height: 27px;
-  padding: 0 7px;
+  gap: 4px;
+  flex: none;
+  height: 30px;
+  padding: 0 8px;
   border: 0;
   border-radius: var(--mh-radius-small);
   background: transparent;
-  color: var(--mh-text-secondary);
+  color: var(--mh-text-primary);
+  font: inherit;
   font-size: var(--mh-size-control);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;
   transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
 }
-.mh-interval-more {
-  padding: 0 5px;
-  color: var(--mh-text-tertiary);
-}
-.mh-interval:hover,
-.mh-interval-more:hover,
-.mh-interval-more[aria-expanded="true"] {
+.mh-interval-trigger:hover,
+.mh-interval-trigger[aria-expanded="true"] {
   background: var(--mh-hover-wash);
   color: var(--mh-text-strong);
 }
-/* The current interval: strongest ink on a plate, as a pressed key. */
-.mh-interval[aria-pressed="true"] {
-  background: var(--mh-surface-2);
-  color: var(--mh-text-strong);
-}
-.mh-interval:active,
-.mh-interval-more:active {
+.mh-interval-trigger:active {
   background: var(--mh-surface-3);
 }
-.mh-interval-more > svg {
+.mh-interval-trigger:focus-visible {
+  outline: 2px solid var(--mh-focus);
+  outline-offset: -2px;
+}
+.mh-interval-trigger > svg {
+  opacity: 0.7;
   transition: transform var(--mh-dur) var(--mh-ease-out);
 }
-.mh-interval-more[aria-expanded="true"] > svg {
+.mh-interval-trigger[aria-expanded="true"] > svg {
   transform: rotate(180deg);
-}
-/* A narrow panel keeps the current interval and the menu, not the whole row of favourites. */
-@container (max-width: 560px) {
-  .mh-interval:not([aria-pressed="true"]) {
-    display: none;
-  }
-}
-/* A row's star: filled on a favourite, shown on an empty one only under the pointer or the keys. */
-.mh-star {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--mh-radius-small);
-  background: transparent;
-  color: var(--mh-text-secondary);
-  cursor: pointer;
-}
-.mh-star[aria-pressed="false"] {
-  opacity: 0;
-}
-.mh-menu-item.mh-active .mh-star {
-  opacity: 1;
-}
-.mh-star:hover {
-  background: var(--mh-surface-3);
-  color: var(--mh-text-strong);
 }
 
 /* A canvas tone's swatch: its chrome over its container over its workspace,

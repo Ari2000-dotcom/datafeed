@@ -38,7 +38,7 @@ import { useOiProfile, type OiProfileMode } from "./useOiProfile";
 import { ScripChart, type LiveTick } from "./ScripChart";
 import { CANDLE_PALETTES, paletteColors, useCandlePalette } from "./candlePalette";
 import { CHART_TYPES, isLineType, useChartType, type ScripChartType } from "./chartType";
-import { INDICATORS, useIndicators } from "./indicators";
+import { INDICATORS, useIndicators } from "./indicators";
 import { PanelHeader } from "../shell/headerSlot";
 
 /**
@@ -368,6 +368,10 @@ export function ScripPage({
               atp={atp}
               stepSec={spec.seconds}
               name={underlyingOf.get(id)?.name ?? id}
+              exchange={id.split(":")[0]!.toUpperCase()}
+              // TradingView's short form: minutes as a bare number ("5"), then "1h", "1D".
+              intervalLabel={spec.seconds < 3600 ? String(spec.seconds / 60) : spec.label}
+              onRemoveIndicator={(gone) => setIndicators(indicators.filter((x) => x !== gone))}
               colors={colors}
               oiProfile={oiView === "off" ? null : deltaOn ? deltaProfile : oiProfile}
               oiMode={oiView === "off" ? "both" : deltaOn ? "both" : oiView}

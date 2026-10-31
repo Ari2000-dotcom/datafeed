@@ -157,7 +157,7 @@ export function StraddleLegend({
 }
 
 /** One reading: an optional label in the legend's ink, the number in its line's colour. */
-function Value({ label, text, colour }: Readonly<{ label?: string; text: string; colour?: string }>) {
+export function Value({ label, text, colour }: Readonly<{ label?: string; text: string; colour?: string }>) {
   return (
     <span className="mh-legend-value">
       {label ? <span className="mh-legend-label">{label}</span> : null}
@@ -167,13 +167,13 @@ function Value({ label, text, colour }: Readonly<{ label?: string; text: string;
 }
 
 /** Green for a rise since the open, red for a fall, nothing for no move or no open. */
-function toneOf(value: number | null | undefined, from: number | null | undefined): string {
+export function toneOf(value: number | null | undefined, from: number | null | undefined): string {
   if (value == null || from == null || !Number.isFinite(value) || !Number.isFinite(from)) return "";
   return value > from ? "mh-up" : value < from ? "mh-down" : "";
 }
 
 /** The move since the session's open, TradingView's way: points, then percent, in the move's colour. */
-function Change({ value, from, toned = true }: Readonly<{ value: number | null | undefined; from: number | null | undefined; toned?: boolean }>) {
+export function Change({ value, from, toned = true }: Readonly<{ value: number | null | undefined; from: number | null | undefined; toned?: boolean }>) {
   if (value == null || from == null || !Number.isFinite(value) || !Number.isFinite(from) || from === 0) return null;
   const d = value - from;
   const sign = d > 0 ? "+" : d < 0 ? "−" : "";
@@ -191,7 +191,7 @@ function Change({ value, from, toned = true }: Readonly<{ value: number | null |
  * pixels so a 1px line covers one row of pixels rather than smearing across two.
  */
 
-function EyeGlyph({ crossed }: Readonly<{ crossed: boolean }>) {
+export function EyeGlyph({ crossed }: Readonly<{ crossed: boolean }>) {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
       <path d="M1.5 9C3.2 5.5 5.9 3.5 9 3.5s5.8 2 7.5 5.5c-1.7 3.5-4.4 5.5-7.5 5.5S3.2 12.5 1.5 9Z" />
@@ -201,7 +201,7 @@ function EyeGlyph({ crossed }: Readonly<{ crossed: boolean }>) {
   );
 }
 
-function TrashGlyph() {
+export function TrashGlyph() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
       <path d="M3 5.5h12M7 5.5v-2h4v2M4.5 5.5l1 9.5h7l1-9.5" />
@@ -209,7 +209,7 @@ function TrashGlyph() {
   );
 }
 
-function ChevronGlyph() {
+export function ChevronGlyph() {
   return (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M4 6l3.5 3 3.5-3" />
