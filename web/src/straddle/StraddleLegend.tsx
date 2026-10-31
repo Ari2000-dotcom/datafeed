@@ -68,9 +68,9 @@ export function StraddleLegend({
     <div className="mh-legend">
       <div className="mh-legend-row mh-legend-main" onPointerEnter={() => setFocus("straddle")} onPointerLeave={() => setFocus(null)}>
         <span className="mh-legend-titles">
-          <span className="mh-legend-title">{name}</span>
-          <span className="mh-legend-title mh-legend-dot">1</span>
-          <span className="mh-legend-title mh-legend-dot">{exchange}</span>
+          <span className="mh-legend-title mh-legend-name">{name}</span>
+          <span className="mh-legend-title mh-legend-dot mh-legend-meta">1</span>
+          <span className="mh-legend-title mh-legend-dot mh-legend-meta">{exchange}</span>
           {shown ? (
             <span className="mh-legend-title mh-legend-dot">
               ATM {fmt0(shown.strike)}

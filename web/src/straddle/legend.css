@@ -224,4 +224,18 @@
     --legend-text: 11px;
     --legend-row: 20px;
   }
+  /* The slimmest plot keeps the name (cut short with an ellipsis if need be) and the ATM strike,
+     drops the interval and the exchange, and its readout runs on a line of its own. */
+  .mh-legend-main .mh-legend-titles {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .mh-legend-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mh-legend-meta {
+    display: none;
+  }
 }

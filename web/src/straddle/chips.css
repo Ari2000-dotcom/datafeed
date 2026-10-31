@@ -171,24 +171,111 @@
     box-shadow var(--mh-dur-fast) var(--mh-ease);
 }
 
-/* The strip's latest quotes: a label in the quiet ink, the number in its line's colour, the
-   move since the open after it; tabular so they hold still as they tick. */
-.mh-quotes {
-  display: inline-flex;
-  flex: 0 1 auto;
+/* The straddles box on the strip (StraddleBox.tsx): the ATM chip as a button that opens the list
+   of every straddle on the chart, with a count of the added ones before its chevron. */
+.mh-straddle-box {
+  flex: none;
+  margin-left: 4px;
+  padding-right: 6px;
+  border: 0;
+  font: inherit;
+  font-size: var(--mh-size-control);
+  cursor: pointer;
+}
+.mh-straddle-box:hover,
+.mh-straddle-box[aria-expanded="true"] {
+  background: var(--mh-surface-2);
+}
+.mh-straddle-box:focus-visible {
+  outline: 2px solid var(--mh-focus);
+  outline-offset: 1px;
+}
+.mh-straddle-box > .mh-chip-move {
+  margin-left: -4px;
+}
+.mh-straddle-box-count {
+  padding: 0 5px;
+  border-radius: var(--mh-radius-small);
+  background: var(--mh-surface-3);
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-caption);
+  line-height: 18px;
+}
+.mh-straddle-box > svg {
+  color: var(--mh-text-tertiary);
+}
+
+/* Its menu: a heading, a row per straddle (swatch, strike, premium, move, remove), "Add straddle". */
+.mh-straddle-menu {
+  min-width: 260px;
+}
+.mh-straddle-menu-head {
+  padding: 6px 12px 4px;
+  color: var(--mh-text-tertiary);
+  font-size: var(--mh-size-caption);
+  font-weight: var(--mh-weight-strong);
+}
+.mh-straddle-row {
+  display: flex;
   align-items: center;
-  gap: 14px;
-  min-width: 0;
-  overflow: hidden;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 6px 0 10px;
+  border-radius: var(--mh-radius);
+  color: var(--mh-text-strong);
   font-size: var(--mh-size-control);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
-.mh-quote {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
+.mh-straddle-row:hover {
+  background: var(--mh-hover-wash);
 }
-.mh-quote-label {
+.mh-straddle-row > i {
+  flex: none;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+.mh-straddle-row > em {
+  padding: 0 6px;
+  border-radius: var(--mh-radius-small);
+  background: var(--mh-surface-3);
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-micro);
+  font-style: normal;
+  line-height: 18px;
+}
+.mh-straddle-row-value {
+  margin-left: auto;
+}
+/* The ATM row has no remove button: its move keeps the same right edge as the others'. */
+.mh-straddle-row:not(:has(.mh-straddle-row-x)) {
+  padding-right: 34px;
+}
+.mh-straddle-row-x {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
   color: var(--mh-text-tertiary);
+  cursor: pointer;
+}
+.mh-straddle-row-x:hover {
+  background: var(--mh-surface-3);
+  color: var(--mh-text-strong);
+}
+.mh-straddle-add {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+.mh-straddle-add:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

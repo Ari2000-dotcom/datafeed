@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { dayLabel, fmt2, istDate, nearestExpiry, pastWeekdays } from "../core/format";
+import { dayLabel, fmt0, fmt2, istDate, nearestExpiry, pastWeekdays } from "../core/format";
 import type { Hub } from "../hub/client";
 import type { Bar, StraddleSnapshot, StraddleUpdate, TopicMessage, Underlying } from "../hub/types";
 import { Dropdown } from "../ui/Dropdown";
 import { MultiDropdown } from "../ui/MultiDropdown";
 import { useFitRow } from "../ui/fitRow";
-import { AlertIcon, ChartIcon, IndicatorsIcon, PlusIcon, Spinner } from "../ui/icons";
+import { AlertIcon, ChartIcon, IndicatorsIcon, Spinner } from "../ui/icons";
 import { lineOf, openOf, sessionOpens, StraddleChart, toggleLine, useHidden, type HistoryStatus, type LineId } from "./StraddleChart";
 import { StraddleLegend } from "./StraddleLegend";
-import { MAX_STRADDLES } from "../desk/compare";
+import { StraddleBox } from "./StraddleBox";
+import { ATM_COLOUR, MAX_STRADDLES } from "../desk/compare";
 import "./chips.css";
 import { picksFor, togglePick, useCompare } from "../desk/compare";
 import { useStrikeLines } from "./useStrikeLines";
@@ -391,8 +392,13 @@ export function StraddlePage({
   const opens = useMemo(() => sessionOpens(chartBars), [chartBars]);
   const shown = (hoverTime !== null ? byTime.get(hoverTime) : undefined) ?? last;
   const shownOpen = openOf(opens, shown);
-  const lastOpen = openOf(opens, last);
-  const fitQuotes = useFitRow();
+  const first = bars[0];
+  // The strip's readouts stay on one line: measured, the least needed pieces give way first.
+  const fitStrip = useFitRow();
+  const legendPicks = picks.map((p) => {
+    const line = strikeLines.find((l) => l.strike === p.strike);
+    return { strike: p.strike, colour: p.colour, value: hoverTime !== null ? line?.byTime.get(hoverTime) ?? null : line?.last ?? null, first: line?.first ?? null };
+  });
   const indicatorIds: LineId[] = pick && !pick.underlying.id.startsWith("mcx:") ? ["vwap", "spot", "fut", "iv", "vix"] : ["vwap", "spot", "fut", "iv"];
 
   const status = error ? (
@@ -495,43 +501,43 @@ export function StraddlePage({
             </>
           ) : null}
 
-          {pick ? (
-            <button
-              type="button"
-              className="mh-chip-add"
-              disabled={1 + picks.length >= MAX_STRADDLES}
-              onClick={() => window.dispatchEvent(new Event("mh-add-straddle"))}
-            >
-              <PlusIcon size={11} /> Add straddle <span>{1 + picks.length}/{MAX_STRADDLES}</span>
-            </button>
+          {pick && last ? (
+            <StraddleBox
+              colour={ATM_COLOUR}
+              strike={shown?.strike ?? null}
+              value={shown?.straddle ?? null}
+              first={shownOpen?.straddle ?? null}
+              picks={legendPicks}
+              max={MAX_STRADDLES}
+              onRemove={(strike) => togglePick(pick.underlying.id, pick.expiry, strike)}
+            />
           ) : null}
           <span className="mh-spacer" />
 
-          {/* The latest spot, synthetic future and the straddle's average, each in its line's colour. */}
-          {pick && last ? (
-            // A slim panel drops the moves first, then Avg, then the synthetic future: spot stays.
-            <span className="mh-quotes" ref={fitQuotes}>
-              {(["spot", "fut", "vwap"] as const).map((id) => {
-                const line = lineOf(id);
-                const v = line.value(last);
-                const from = lastOpen ? line.value(lastOpen) : null;
-                const pct = v !== null && from !== null && from !== 0 && id !== "vwap" ? ((v - from) / from) * 100 : null;
-                return (
-                  <span key={id} className="mh-quote" data-drop={id === "vwap" ? 2 : id === "fut" ? 3 : undefined}>
-                    <span className="mh-quote-label">{id === "vwap" ? "Avg" : line.label}</span>
-                    <span style={{ color: `var(${line.colour})` }}>{v !== null && Number.isFinite(v) ? fmt2(v) : "—"}</span>
-                    {pct !== null ? (
-                      <span className={pct > 0 ? "mh-up" : pct < 0 ? "mh-down" : undefined} data-drop={1}>
-                        {pct > 0 ? "+" : pct < 0 ? "−" : ""}
-                        {Math.abs(pct).toFixed(2)}%
-                      </span>
-                    ) : null}
-                  </span>
-                );
-              })}
-            </span>
+          {pick ? (
+            <div className="mh-readouts" ref={fitStrip}>
+              {status ??
+                (last ? (
+                  <>
+                    {/* In groups, a hairline between them: the ATM strike and its two legs, the
+                        straddle and its session average, then IV. In a slim panel the least needed
+                        pieces give way first, so the straddle itself always fits. */}
+                    <span className="mh-readgroup" data-drop={5}>
+                      <Readout label="ATM" value={`${fmt0(last.strike)}${last.rolled ? " (rolled)" : ""}`} />
+                      <Readout drop={3} badge side="call" label="CE" value={fmt2(last.call)} title={`${fmt0(last.strike)} call`} />
+                      <Readout drop={3} badge side="put" label="PE" value={fmt2(last.put)} title={`${fmt0(last.strike)} put`} />
+                    </span>
+                    <span className="mh-readgroup">
+                      <Readout label="Straddle" value={fmt2(last.straddle)} change={first ? move(last.straddle, first.straddle) : null} changeDrop={4} />
+                      <Readout drop={2} label="Avg" value={last.vwap != null ? fmt2(last.vwap) : "—"} title="The straddle's average price this session (its VWAP)" />
+                    </span>
+                    <span className="mh-readgroup" data-drop={1}>
+                      <Readout label="IV" value={last.iv != null ? `${last.iv.toFixed(2)}%` : "—"} change={first?.iv != null && last.iv != null ? { text: `${signed(last.iv - first.iv)} pts`, tone: tone(last.iv - first.iv) } : null} />
+                    </span>
+                  </>
+                ) : null)}
+            </div>
           ) : null}
-          {status ? <div className="mh-readouts">{status}</div> : null}
         </div>
 
         <div className="mh-container-body">
@@ -545,10 +551,7 @@ export function StraddlePage({
                   shown={shown}
                   open={shownOpen}
                   hidden={hiddenLines}
-                  picks={picks.map((p) => {
-                    const line = strikeLines.find((l) => l.strike === p.strike);
-                    return { strike: p.strike, colour: p.colour, value: hoverTime !== null ? line?.byTime.get(hoverTime) ?? null : line?.last ?? null, first: line?.first ?? null };
-                  })}
+                  picks={legendPicks}
                   onRemovePick={(strike) => togglePick(pick.underlying.id, pick.expiry, strike)}
                   // Open while today's minutes keep arriving: a stray minute (a weekend tick) is not a market.
                   trading={live && !closedDay && last !== undefined && Date.now() - last.t < 3 * 60_000}
@@ -642,3 +645,53 @@ const INDICATOR_NOTES: Record<LineId, string> = {
   iv: "At the money",
   vix: "NSE's volatility index",
 };
+
+type Tone = "mh-up" | "mh-down" | "";
+const tone = (d: number): Tone => (d > 0 ? "mh-up" : d < 0 ? "mh-down" : "");
+const sign = (d: number) => (d > 0 ? "+" : d < 0 ? "−" : "");
+const signed = (d: number) => `${sign(d)}${fmt2(Math.abs(d))}`;
+
+/** A move since the session's first minute, as a percent. */
+function move(now: number, from: number): { text: string; tone: Tone } {
+  const pct = Number((from !== 0 ? ((now - from) / from) * 100 : 0).toFixed(2));
+  return { text: `${sign(pct)}${Math.abs(pct).toFixed(2)}%`, tone: tone(pct) };
+}
+
+/**
+ * One quiet readout on the strip: label one ink tier down, value, and its move since the open. A
+ * `badge` label sits in a small plate, as the chips row marks "ATM": the CE and PE legs.
+ */
+function Readout({
+  label,
+  value,
+  change,
+  className,
+  badge = false,
+  side,
+  title,
+  drop,
+  changeDrop,
+}: Readonly<{
+  label: string;
+  value: string;
+  change?: { text: string; tone: Tone } | null;
+  className?: string;
+  badge?: boolean;
+  side?: "call" | "put";
+  title?: string;
+  drop?: number;
+  /** The move alone gives way at this rank, the value staying. */
+  changeDrop?: number;
+}>) {
+  return (
+    <span className={className ? `mh-readout ${className}` : "mh-readout"} title={title} data-drop={drop} data-side={side}>
+      <span className={badge ? "mh-readout-label mh-readout-badge" : "mh-readout-label"}>{label}</span>
+      <span className="mh-readout-value">{value}</span>
+      {change ? (
+        <span className={`mh-readout-move ${change.tone}`} data-drop={changeDrop}>
+          {change.text}
+        </span>
+      ) : null}
+    </span>
+  );
+}
