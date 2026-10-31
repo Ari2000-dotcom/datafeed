@@ -393,6 +393,7 @@ export function StraddlePage({
   const shown = (hoverTime !== null ? byTime.get(hoverTime) : undefined) ?? last;
   const shownOpen = openOf(opens, shown);
   const first = bars[0];
+  const mcx = pick?.underlying.id.startsWith("mcx:") ?? false;
   // The strip's readouts stay on one line: measured, the least needed pieces give way first.
   const fitStrip = useFitRow();
   const legendPicks = picks.map((p) => {
@@ -523,6 +524,26 @@ export function StraddlePage({
                     {/* In groups, a hairline between them: the ATM strike and its two legs, the
                         straddle and its session average, then IV. In a slim panel the least needed
                         pieces give way first, so the straddle itself always fits. */}
+                    {/* The underlying first: spot, then the synthetic future (call − put + strike). MCX
+                        has no spot, so its first figure is the future its options are written on. On a
+                        slim strip the moves go first, then the synthetic; spot stays with the straddle. */}
+                    <span className="mh-readgroup">
+                      <Readout
+                        label={mcx ? "Fut" : "Spot"}
+                        value={fmt2(last.spot)}
+                        change={first ? move(last.spot, first.spot) : null}
+                        changeDrop={1}
+                        title={mcx ? "The future the options are written on" : "The underlying's spot"}
+                      />
+                      <Readout
+                        drop={4}
+                        label={mcx ? "Syn fut" : "Fut"}
+                        value={fmt2(last.synth)}
+                        change={first ? move(last.synth, first.synth) : null}
+                        changeDrop={1}
+                        title="Synthetic future: call − put + strike"
+                      />
+                    </span>
                     <span className="mh-readgroup" data-drop={5}>
                       <Readout label="ATM" value={`${fmt0(last.strike)}${last.rolled ? " (rolled)" : ""}`} />
                       <Readout drop={3} badge side="call" label="CE" value={fmt2(last.call)} title={`${fmt0(last.strike)} call`} />
@@ -556,6 +577,7 @@ export function StraddlePage({
                   onRemovePick={(strike) => togglePick(pick.underlying.id, pick.expiry, strike)}
                   // Open while today's minutes keep arriving: a stray minute (a weekend tick) is not a market.
                   trading={live && !closedDay && last !== undefined && Date.now() - last.t < 3 * 60_000}
+                  mcx={mcx}
                 />
               }
               showVix={!pick.underlying.id.startsWith("mcx:")}

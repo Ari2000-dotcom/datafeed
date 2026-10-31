@@ -39,11 +39,14 @@ export function StraddleLegend({
   picks,
   onRemovePick,
   trading,
+  mcx,
 }: Readonly<{
   name: string;
   exchange: string;
   /** Live minutes arriving now, or a closed market / a past session. */
   trading: boolean;
+  /** MCX has no spot: its "spot" line is the future its options are written on, and says so. */
+  mcx: boolean;
   shown: Bar | undefined;
   /** The open of the session `shown` is in: what each move is measured from. */
   open: Bar | undefined;
@@ -97,20 +100,21 @@ export function StraddleLegend({
         ? null
         : (["vwap", "spot", "fut"] as const).map((id) => {
             const line = lineOf(id);
+            const label = mcx && id === "spot" ? "Fut" : line.label;
             const v = shown ? line.value(shown) : null;
             const from = open ? line.value(open) : null;
             const off = hidden.has(id);
             return (
               <div key={id} className="mh-legend-row" data-hidden={off || undefined} onPointerEnter={() => setFocus(id)} onPointerLeave={() => setFocus(null)}>
                 <span className="mh-legend-titles">
-                  <span className="mh-legend-title">{line.label}</span>
+                  <span className="mh-legend-title">{label}</span>
                 </span>
                 <span className="mh-legend-values">
                   <Value text={v !== null && Number.isFinite(v) ? line.format(v) : "—"} colour={`var(${line.colour})`} />
                   {id === "vwap" ? null : <Change value={v} from={from} />}
                 </span>
                 <span className="mh-legend-buttons">
-                  <button type="button" className="mh-legend-button" aria-label={off ? `Show ${line.label}` : `Hide ${line.label}`} title={off ? "Show" : "Hide"} onClick={() => toggleLine(id)}>
+                  <button type="button" className="mh-legend-button" aria-label={off ? `Show ${label}` : `Hide ${label}`} title={off ? "Show" : "Hide"} onClick={() => toggleLine(id)}>
                     <EyeGlyph crossed={off} />
                   </button>
                 </span>
