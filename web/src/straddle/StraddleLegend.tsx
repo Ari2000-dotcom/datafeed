@@ -68,9 +68,6 @@ export function StraddleLegend({
     <div className="mh-legend">
       <div className="mh-legend-row mh-legend-main" onPointerEnter={() => setFocus("straddle")} onPointerLeave={() => setFocus(null)}>
         <span className="mh-legend-titles">
-          <span className="mh-legend-logo" aria-hidden>
-            {name.charAt(0)}
-          </span>
           <span className="mh-legend-title">{name}</span>
           <span className="mh-legend-title mh-legend-dot">1</span>
           <span className="mh-legend-title mh-legend-dot">{exchange}</span>

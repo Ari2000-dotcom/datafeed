@@ -1,12 +1,11 @@
 /*
  * The straddle chart's status line (StraddleLegend.tsx), measured off TradingView's own chart:
- * rows 24px tall from 4px inside the plot's top-left corner; the instrument in 16px with a "·" in
- * a 12px slot between its parts; readings and line rows in 13px, a label then its number, 6px
- * between readings; numbers in their line's colour. The words are TradingView's #dbdbdb, on a
- * plate of the chart's ground solid enough that no line shows through a letter. The instrument's
- * row, the ATM strike with it, is in capitals at 16px; only its readings drop to 13px. Under the
- * rows, a 29 x 21 arrow folds the line rows away, as TradingView's indicator toggler does. A row's buttons are 28 x 24 and show only while the
- * pointer is on the row.
+ * rows 24px tall from 4px inside the plot's top-left corner; the instrument in 16px capitals with
+ * a "·" in a 12px slot between its parts; readings and line rows in 13px, 6px between readings;
+ * words in TradingView's #dbdbdb. Each row sits on one plate of the chart's ground, the width of
+ * its words and no wider, so no line shows through a letter and no seams show between pieces of
+ * a row. A row's buttons are 28 x 24 and show only while the pointer is on the row. Under the
+ * rows, a 29 x 21 arrow folds the line rows away, as TradingView's indicator toggler does.
  */
 
 .mh-legend-anchor {
@@ -35,6 +34,9 @@
   flex-wrap: wrap;
   max-width: 100%;
   min-height: 24px;
+  padding: 0 0 0 1px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mh-bg) 85%, transparent);
   pointer-events: auto;
 }
 
@@ -42,8 +44,7 @@
   display: inline-flex;
   align-items: center;
   height: 24px;
-  padding: 0 4px 0 1px;
-  background: color-mix(in srgb, var(--mh-bg) 80%, transparent);
+  padding-right: 4px;
 }
 .mh-legend-title {
   position: relative;
@@ -70,49 +71,29 @@
   flex-wrap: wrap;
   min-height: 24px;
   padding-left: 4px;
-  background: color-mix(in srgb, var(--mh-bg) 80%, transparent);
-}
-.mh-legend-main .mh-legend-values {
-  padding-left: 8px;
 }
 .mh-legend-value {
   padding-right: 6px;
 }
+/* A label against its number, as TradingView's "O22,964.50"; two letters ("CE") take a hair more. */
 .mh-legend-label {
-  padding-right: 1px;
+  padding-right: 2px;
   color: var(--mh-legend-text);
 }
 /* The instrument's readout: every number in the colour of the straddle's move (the readout's
    `mh-up` / `mh-down`), the labels in the legend's ink. */
 
-/* The symbol's mark: TradingView's 18px round logo, here the name's first letter. */
-.mh-legend-logo {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 18px;
-  height: 18px;
-  margin: 0 1px 0 3px;
-  border-radius: 50%;
-  background: var(--mh-surface-3);
-  color: var(--mh-legend-text);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-/* The market's state, in TradingView's pill: a dash while closed, a green dot while trading. */
+/* The market's state, TradingView's 20 x 18 pill: a short bar while closed, a dot while trading. */
 .mh-legend-status {
   display: inline-flex;
   align-items: center;
   height: 24px;
-  padding: 0 0 0 4px;
-  background: color-mix(in srgb, var(--mh-bg) 80%, transparent);
+  padding: 0 2px 0 2px;
 }
 .mh-legend-status-item {
   position: relative;
   display: inline-block;
-  width: 26px;
+  width: 20px;
   height: 18px;
   border-radius: 9px;
   background: var(--mh-surface-2);
@@ -120,18 +101,18 @@
 .mh-legend-status-item::before {
   content: "";
   position: absolute;
-  top: 7px;
-  left: 9px;
+  top: 8px;
+  left: 6px;
   width: 8px;
-  height: 4px;
-  border-radius: 2px;
+  height: 2px;
+  border-radius: 1px;
   background: #b8b8b8;
 }
 .mh-legend-status-item.mh-open::before {
-  top: 5px;
-  left: 9px;
-  width: 8px;
-  height: 8px;
+  top: 6px;
+  left: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--mh-up);
 }
@@ -159,7 +140,7 @@
   height: 24px;
   padding: 0;
   border: 0;
-  background: color-mix(in srgb, var(--mh-bg) 80%, transparent);
+  background: transparent;
   color: var(--mh-legend-text);
   cursor: pointer;
   transition:
@@ -167,7 +148,7 @@
     color var(--mh-dur-fast) var(--mh-ease);
 }
 .mh-legend-button:last-child {
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 2px 2px 0;
 }
 .mh-legend-button:hover {
   background: var(--mh-surface-2);
@@ -182,14 +163,15 @@
 .mh-legend-toggler {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   height: 21px;
   min-width: 29px;
-  margin: 3px 0 0 5px;
+  margin: 3px 0 0 1px;
   padding: 0 6px;
   border: 1px solid var(--mh-line-strong);
   border-radius: 3px;
-  background: color-mix(in srgb, var(--mh-bg) 80%, transparent);
+  background: color-mix(in srgb, var(--mh-bg) 85%, transparent);
   color: var(--mh-legend-text);
   font: inherit;
   font-size: 12px;
