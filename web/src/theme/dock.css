@@ -1,6 +1,6 @@
 /*
- * The desk, TradingView's way: containers meet edge to edge with a hairline of workspace between
- * them, square, no shadow; the room goes to the data. Layering is by tone, not by space: each
+ * The desk, TradingView's current way: containers a 6px corner each, 4px apart on a ground darker
+ * than they are (one with the title bar), no shadow, no outline. Layering is by tone: each
  * container's header a step lighter than its plate (`--mh-head`), the plate the chart's ground,
  * menus floating over both.
  *
@@ -47,17 +47,17 @@
 
 .mh-dock .dv-groupview {
   border: 0;
+  border-radius: var(--mh-dock-radius);
   overflow: hidden;
-  background: transparent;
+  background: var(--mh-bg);
 }
 
-/* The plate: tone alone against the workspace, rounded but for the corner the first tab opens
-   from, where its active tab's own top corners carry on the same curve. */
+/* The plate: tone alone against the darker ground; the container's own corner rounds it. */
 .mh-dock .dv-groupview > .dv-content-container {
   position: relative;
   z-index: 0;
   border: 1px solid var(--mh-plate-edge);
-  border-radius: 0 var(--mh-dock-radius) var(--mh-dock-radius) var(--mh-dock-radius);
+  border-radius: 0;
   overflow: hidden;
   background: var(--mh-bg);
   contain: layout paint;

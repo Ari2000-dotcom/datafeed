@@ -709,7 +709,10 @@ export function Workspace({ hub, themeKey, onApi }: Readonly<{ hub: Hub; themeKe
     const relayout = () => {
       requestAnimationFrame(() => {
         const el = host.current;
-        if (el) api.layout(el.clientWidth, el.clientHeight, true);
+        if (!el) return;
+        // The host's padding is room round the desk, not the desk's own.
+        const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+        api.layout(el.clientWidth - 2 * pad, el.clientHeight - 2 * pad, true);
       });
     };
     document.addEventListener("fullscreenchange", relayout);

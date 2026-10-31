@@ -132,6 +132,10 @@ input {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  /* Room under the title bar, at the foot and at the sides, on the desk's ground. */
+  padding: 2px;
+  box-sizing: border-box;
+  background: var(--mh-workspace);
 }
 
 .mh-titlebar {
