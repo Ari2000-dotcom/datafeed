@@ -170,3 +170,25 @@
     color var(--mh-dur-fast) var(--mh-ease),
     box-shadow var(--mh-dur-fast) var(--mh-ease);
 }
+
+/* The strip's latest quotes: a label in the quiet ink, the number in its line's colour, the
+   move since the open after it; tabular so they hold still as they tick. */
+.mh-quotes {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--mh-size-control);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mh-quote {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.mh-quote-label {
+  color: var(--mh-text-tertiary);
+}

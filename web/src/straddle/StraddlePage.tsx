@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { dayLabel, istDate, nearestExpiry, pastWeekdays } from "../core/format";
+import { dayLabel, fmt2, istDate, nearestExpiry, pastWeekdays } from "../core/format";
 import type { Hub } from "../hub/client";
 import type { Bar, StraddleSnapshot, StraddleUpdate, TopicMessage, Underlying } from "../hub/types";
 import { Dropdown } from "../ui/Dropdown";
-import { AlertIcon, ChartIcon, PlusIcon, Spinner } from "../ui/icons";
-import { openOf, sessionOpens, StraddleChart, useHidden, type HistoryStatus } from "./StraddleChart";
+import { MultiDropdown } from "../ui/MultiDropdown";
+import { useFitRow } from "../ui/fitRow";
+import { AlertIcon, ChartIcon, IndicatorsIcon, PlusIcon, Spinner } from "../ui/icons";
+import { lineOf, openOf, sessionOpens, StraddleChart, toggleLine, useHidden, type HistoryStatus, type LineId } from "./StraddleChart";
 import { StraddleLegend } from "./StraddleLegend";
 import { MAX_STRADDLES } from "../desk/compare";
 import "./chips.css";
@@ -389,6 +391,9 @@ export function StraddlePage({
   const opens = useMemo(() => sessionOpens(chartBars), [chartBars]);
   const shown = (hoverTime !== null ? byTime.get(hoverTime) : undefined) ?? last;
   const shownOpen = openOf(opens, shown);
+  const lastOpen = openOf(opens, last);
+  const fitQuotes = useFitRow();
+  const indicatorIds: LineId[] = pick && !pick.underlying.id.startsWith("mcx:") ? ["vwap", "spot", "fut", "iv", "vix"] : ["vwap", "spot", "fut", "iv"];
 
   const status = error ? (
     <span className="mh-hint mh-error" role="alert">
@@ -466,7 +471,29 @@ export function StraddlePage({
             </>
           )}
 
-          <span className="mh-spacer" />
+          {pick ? (
+            <>
+              <span className="mh-tv-sep" aria-hidden />
+              {/* TradingView's Indicators button: the chart's lines, each switched on or off. */}
+              <span className="mh-tv-bare">
+                <MultiDropdown
+                  label="Indicators"
+                  caption={false}
+                  search={false}
+                  value={indicatorIds.filter((id) => !hiddenLines.has(id))}
+                  onChange={(next) => {
+                    for (const id of indicatorIds) if (next.includes(id) === hiddenLines.has(id)) toggleLine(id);
+                  }}
+                  renderValue={() => (
+                    <span className="mh-ind-trigger">
+                      <IndicatorsIcon size={16} /> Indicators
+                    </span>
+                  )}
+                  options={indicatorIds.map((id) => ({ value: id, label: lineOf(id).label, note: INDICATOR_NOTES[id] }))}
+                />
+              </span>
+            </>
+          ) : null}
 
           {pick ? (
             <button
@@ -477,6 +504,32 @@ export function StraddlePage({
             >
               <PlusIcon size={11} /> Add straddle <span>{1 + picks.length}/{MAX_STRADDLES}</span>
             </button>
+          ) : null}
+          <span className="mh-spacer" />
+
+          {/* The latest spot, synthetic future and the straddle's average, each in its line's colour. */}
+          {pick && last ? (
+            // A slim panel drops the moves first, then Avg, then the synthetic future: spot stays.
+            <span className="mh-quotes" ref={fitQuotes}>
+              {(["spot", "fut", "vwap"] as const).map((id) => {
+                const line = lineOf(id);
+                const v = line.value(last);
+                const from = lastOpen ? line.value(lastOpen) : null;
+                const pct = v !== null && from !== null && from !== 0 && id !== "vwap" ? ((v - from) / from) * 100 : null;
+                return (
+                  <span key={id} className="mh-quote" data-drop={id === "vwap" ? 2 : id === "fut" ? 3 : undefined}>
+                    <span className="mh-quote-label">{id === "vwap" ? "Avg" : line.label}</span>
+                    <span style={{ color: `var(${line.colour})` }}>{v !== null && Number.isFinite(v) ? fmt2(v) : "—"}</span>
+                    {pct !== null ? (
+                      <span className={pct > 0 ? "mh-up" : pct < 0 ? "mh-down" : undefined} data-drop={1}>
+                        {pct > 0 ? "+" : pct < 0 ? "−" : ""}
+                        {Math.abs(pct).toFixed(2)}%
+                      </span>
+                    ) : null}
+                  </span>
+                );
+              })}
+            </span>
           ) : null}
           {status ? <div className="mh-readouts">{status}</div> : null}
         </div>
@@ -580,3 +633,12 @@ function daysTo(ymd: string): string {
   return days <= 0 ? "Today" : `${days}d`;
 }
 
+/** What each of the chart's lines is, in the Indicators menu. */
+const INDICATOR_NOTES: Record<LineId, string> = {
+  straddle: "",
+  vwap: "The straddle's session average",
+  spot: "The underlying",
+  fut: "Call − put + strike",
+  iv: "At the money",
+  vix: "NSE's volatility index",
+};
