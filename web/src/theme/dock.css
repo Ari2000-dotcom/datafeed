@@ -1,15 +1,14 @@
 /*
- * The desk, TradingView's current way: containers a 6px corner each, 4px apart on a ground darker
- * than they are (one with the title bar), no shadow, no outline. Layering is by tone: each
- * container's header a step lighter than its plate (`--mh-head`), the plate the chart's ground,
- * menus floating over both.
+ * The desk as plates: each container lifts off a lighter workspace by tone alone, a 6px corner,
+ * 6px of workspace between two and round the desk. No shadow.
  *
  * A container holding one panel has one header line: the panel's own strip, lifted into the
- * dock's header (shell/headerSlot.tsx), with the drag grip and the container's buttons at its
- * end. A container holding several keeps its tab row.
+ * dock's header (shell/headerSlot.tsx) as the plate's top, with the drag grip and the
+ * container's buttons at its end. A container holding several keeps its tab row over the
+ * workspace, its active tab the plate's own colour, joined to the plate like a folder's tab.
  *
- * The focused container is marked by a 2px accent line along its header's top edge, the rest
- * unmarked, so which one takes the keys is plain at a glance without framing every container.
+ * The focused container is framed in the accent blue, its active tab (or its header line) and its
+ * plate as one outline, the rest frameless, so which one takes the keys is plain at a glance.
  */
 
 .mh-dock {
@@ -47,36 +46,25 @@
 
 .mh-dock .dv-groupview {
   border: 0;
-  border-radius: var(--mh-dock-radius);
   overflow: hidden;
-  background: var(--mh-bg);
+  background: transparent;
 }
 
-/* The plate: tone alone against the darker ground; the container's own corner rounds it. */
+/* The plate: tone alone against the workspace, rounded but for the corner the first tab opens
+   from, where its active tab's own top corners carry on the same curve. */
 .mh-dock .dv-groupview > .dv-content-container {
   position: relative;
   z-index: 0;
   border: 1px solid var(--mh-plate-edge);
-  border-radius: 0;
+  border-radius: 0 var(--mh-dock-radius) var(--mh-dock-radius) var(--mh-dock-radius);
   overflow: hidden;
   background: var(--mh-bg);
   contain: layout paint;
   transition: border-color var(--mh-dur) var(--mh-ease);
 }
-/* The focused container: an accent line along the top of its header. */
-.mh-dock .dv-groupview > .dv-tabs-and-actions-container::before {
-  content: "";
-  position: absolute;
-  /* Over the strip lifted into the header, which stacks at 5 for its menus' sake. */
-  z-index: 6;
-  inset: 0 0 auto;
-  height: 2px;
-  background: transparent;
-  pointer-events: none;
-  transition: background-color var(--mh-dur) var(--mh-ease);
-}
-.mh-dock .dv-groupview.dv-active-group > .dv-tabs-and-actions-container::before {
-  background: var(--mh-dock-accent);
+/* The focused container's frame: a blue edge round its plate. */
+.mh-dock .dv-groupview.dv-active-group > .dv-content-container {
+  border-color: var(--mh-dock-accent);
 }
 
 /* -- the tab strip -------------------------------------------------------------------------- */
@@ -88,12 +76,18 @@
   min-height: var(--mh-dock-tab-h);
   max-width: 100%;
   margin-bottom: -1px;
-  background: var(--mh-head);
+  background: transparent;
 }
 .mh-dock .dv-tabs-and-actions-container .dv-tabs-container {
   scrollbar-width: none;
 }
 
+/* Tabs share a narrow container's row, each title cut with an ellipsis, rather than the active one
+   being pushed out of sight past the row's end. */
+.mh-dock .dv-tabs-container > .dv-tab {
+  flex: 0 1 auto;
+  min-width: 64px;
+}
 .mh-dock .dv-tab {
   position: relative;
   display: flex;
@@ -109,6 +103,14 @@
   z-index: 2;
   border-top-left-radius: var(--mh-dock-radius);
   border-top-right-radius: var(--mh-dock-radius);
+}
+/* The focused container: its active tab carries the blue frame's top edge, open at the bottom
+   so the frame runs on unbroken into the plate under it. */
+.mh-dock .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  box-shadow:
+    inset 0 1px 0 var(--mh-dock-accent),
+    inset 1px 0 0 var(--mh-dock-accent),
+    inset -1px 0 0 var(--mh-dock-accent);
 }
 
 /* Pointing at a tab that is not the active one lifts it toward the active tab: strong text and an
@@ -298,11 +300,27 @@
 
 /* -- one header line: a single panel's strip in its container's header -------------------------- */
 
+/* The header line is the plate's top: the plate's colour, its top corners rounded, edged as the
+   plate is; the plate under it squares its own top to meet it. */
 .mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) {
   height: var(--mh-strip-h);
   min-height: var(--mh-strip-h);
   margin-bottom: 0;
-  border-bottom: 1px solid var(--mh-strip-edge);
+  border: 1px solid var(--mh-plate-edge);
+  border-bottom-color: var(--mh-strip-edge);
+  border-radius: var(--mh-dock-radius) var(--mh-dock-radius) 0 0;
+  background: var(--mh-bg);
+  transition: border-color var(--mh-dur) var(--mh-ease);
+}
+.mh-dock .dv-groupview:has(> .dv-tabs-and-actions-container .mh-header-slot:not(:empty)) > .dv-content-container {
+  border-top: 0;
+  border-radius: 0 0 var(--mh-dock-radius) var(--mh-dock-radius);
+}
+/* Focused: the header line takes the frame's top and sides, the plate the rest. */
+.mh-dock .dv-groupview.dv-active-group > .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) {
+  border-top-color: var(--mh-dock-accent);
+  border-left-color: var(--mh-dock-accent);
+  border-right-color: var(--mh-dock-accent);
 }
 .mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) > .dv-tabs-container {
   display: none;

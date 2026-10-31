@@ -26,9 +26,7 @@
 [data-canvas="neutral"] {
   --mh-chrome: #111111;
   --mh-well: #0b0b0b;
-  /* The ground between containers: darker than they are, so they sit on it rather than being
-     outlined by it, and one with the title bar over it. */
-  --mh-workspace: #0d0d0d;
+  --mh-workspace: #292929;
   --mh-bg: #1b1b1b;
   --mh-head: #232323;
   --mh-surface-1: #202020;
@@ -53,7 +51,7 @@
 [data-canvas="tradingview"] {
   --mh-chrome: #0b0c10;
   --mh-well: #0b0c10;
-  --mh-workspace: #08090c;
+  --mh-workspace: #15171d;
   --mh-bg: #171b26;
   --mh-head: #0b0c10;
   --mh-surface-1: #1e222d;
@@ -109,9 +107,9 @@
   color-scheme: dark;
   /* -- the desk (theme/dock.css): the dock's measures and its accent ----------------- */
   --mh-dock-tab-h: 28px;
-  /* TradingView's current desk: containers a small corner apart on a ground darker than they are,
-     4px between two (2px each side) and 4px round the desk (the host's 2px and the gutter's). */
-  --mh-dock-gutter: 2px;
+  /* Plates on a lighter workspace: 6px between two (3px each side) and 6px round the desk (the
+     host's 3px and the gutter's), a 6px corner each. */
+  --mh-dock-gutter: 3px;
   --mh-dock-radius: 6px;
   /* The one accent: TradingView's blue. Fills, rules and rings use it as is; text in it uses the
      lighter shade, which holds 5:1 on every ground. */

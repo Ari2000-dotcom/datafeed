@@ -133,7 +133,7 @@ input {
   min-width: 0;
   overflow: hidden;
   /* Room under the title bar, at the foot and at the sides, on the desk's ground. */
-  padding: 2px;
+  padding: 3px;
   box-sizing: border-box;
   background: var(--mh-workspace);
 }
