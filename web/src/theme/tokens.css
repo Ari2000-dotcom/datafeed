@@ -162,6 +162,9 @@
      on TradingView the plot runs straight into its scales), the crosshair, and the dark chips its
      time and price sit in on the axes (TradingView's near-black label, white ink) */
   --mh-chart-axis-text: var(--mh-text-secondary);
+  /* The chart's status line: near-white, brighter than the page's text, so it reads as sharp on
+     the chart's ground as TradingView's #dbdbdb does on black. */
+  --mh-legend-text: #f2f2f2;
   --mh-chart-axis-line: transparent;
   /* The rule between two panes: a step brighter than the grid, so it reads as an edge between two
      charts and never as one more grid line. */
