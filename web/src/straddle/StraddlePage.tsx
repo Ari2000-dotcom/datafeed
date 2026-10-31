@@ -501,6 +501,7 @@ export function StraddlePage({
             </>
           ) : null}
 
+          {pick && last ? <span className="mh-tv-sep" aria-hidden /> : null}
           {pick && last ? (
             <StraddleBox
               colour={ATM_COLOUR}

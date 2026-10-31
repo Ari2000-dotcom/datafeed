@@ -445,6 +445,7 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-size: var(--mh-size-control);
 }
 .mh-ind-count {
   color: var(--mh-text-tertiary);

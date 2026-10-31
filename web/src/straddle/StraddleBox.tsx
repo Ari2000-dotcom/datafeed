@@ -76,7 +76,7 @@ export function StraddleBox({
         <span style={{ color: colour }}>{value !== null ? fmt2(value) : "—"}</span>
         <Move value={value} from={first} />
         {picks.length > 0 ? <span className="mh-straddle-box-count">+{picks.length}</span> : null}
-        <ChevronDownIcon size={12} />
+        <ChevronDownIcon size={13} />
       </button>
 
       {open ? (

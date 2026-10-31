@@ -175,8 +175,8 @@
    of every straddle on the chart, with a count of the added ones before its chevron. */
 .mh-straddle-box {
   flex: none;
-  margin-left: 4px;
-  padding-right: 6px;
+  height: 27px;
+  padding-right: 7px;
   border: 0;
   font: inherit;
   font-size: var(--mh-size-control);
@@ -219,7 +219,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 34px;
+  min-height: 36px;
   padding: 0 6px 0 10px;
   border-radius: var(--mh-radius);
   color: var(--mh-text-strong);
