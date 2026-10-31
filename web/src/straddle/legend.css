@@ -79,7 +79,61 @@
   padding-right: 6px;
 }
 .mh-legend-label {
-  padding-right: 2px;
+  padding-right: 1px;
+  color: var(--mh-legend-text);
+}
+/* The instrument's readout: every number in the colour of the straddle's move (the readout's
+   `mh-up` / `mh-down`), the labels in the legend's ink. */
+
+/* The symbol's mark: TradingView's 18px round logo, here the name's first letter. */
+.mh-legend-logo {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0 1px 0 3px;
+  border-radius: 50%;
+  background: var(--mh-surface-3);
+  color: var(--mh-legend-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The market's state, in TradingView's pill: a dash while closed, a green dot while trading. */
+.mh-legend-status {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 0 0 4px;
+  background: color-mix(in srgb, var(--mh-bg) 80%, transparent);
+}
+.mh-legend-status-item {
+  position: relative;
+  display: inline-block;
+  width: 26px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--mh-surface-2);
+}
+.mh-legend-status-item::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 9px;
+  width: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: #b8b8b8;
+}
+.mh-legend-status-item.mh-open::before {
+  top: 5px;
+  left: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mh-up);
 }
 
 /* A hidden line's row: its words and numbers at half strength, as TradingView dims a hidden study. */

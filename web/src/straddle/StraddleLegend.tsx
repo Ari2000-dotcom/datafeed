@@ -38,9 +38,12 @@ export function StraddleLegend({
   hidden,
   picks,
   onRemovePick,
+  trading,
 }: Readonly<{
   name: string;
   exchange: string;
+  /** Live minutes arriving now, or a closed market / a past session. */
+  trading: boolean;
   shown: Bar | undefined;
   /** The open of the session `shown` is in: what each move is measured from. */
   open: Bar | undefined;
@@ -65,6 +68,9 @@ export function StraddleLegend({
     <div className="mh-legend">
       <div className="mh-legend-row mh-legend-main" onPointerEnter={() => setFocus("straddle")} onPointerLeave={() => setFocus(null)}>
         <span className="mh-legend-titles">
+          <span className="mh-legend-logo" aria-hidden>
+            {name.charAt(0)}
+          </span>
           <span className="mh-legend-title">{name}</span>
           <span className="mh-legend-title mh-legend-dot">1</span>
           <span className="mh-legend-title mh-legend-dot">{exchange}</span>
@@ -75,12 +81,17 @@ export function StraddleLegend({
             </span>
           ) : null}
         </span>
+        <span className="mh-legend-status" title={trading ? "Market open" : "Market closed"}>
+          <span className={trading ? "mh-legend-status-item mh-open" : "mh-legend-status-item"} aria-hidden />
+        </span>
         {shown ? (
-          <span className="mh-legend-values">
-            <Value label="CE" text={fmt2(shown.call)} colour="var(--mh-up)" />
-            <Value label="PE" text={fmt2(shown.put)} colour="var(--mh-down)" />
-            <Value label="S" text={fmt2(shown.straddle)} colour={`var(${lineOf("straddle").colour})`} />
-            <Change value={shown.straddle} from={open?.straddle} />
+          // TradingView's readout: each label against its number, every number in the one colour of
+          // the straddle's move since the open.
+          <span className={`mh-legend-values mh-legend-readout ${toneOf(shown.straddle, open?.straddle)}`}>
+            <Value label="CE" text={fmt2(shown.call)} />
+            <Value label="PE" text={fmt2(shown.put)} />
+            <Value label="S" text={fmt2(shown.straddle)} />
+            <Change value={shown.straddle} from={open?.straddle} toned={false} />
           </span>
         ) : null}
       </div>
@@ -154,14 +165,19 @@ function Value({ label, text, colour }: Readonly<{ label?: string; text: string;
   );
 }
 
+/** Green for a rise since the open, red for a fall, nothing for no move or no open. */
+function toneOf(value: number | null | undefined, from: number | null | undefined): string {
+  if (value == null || from == null || !Number.isFinite(value) || !Number.isFinite(from)) return "";
+  return value > from ? "mh-up" : value < from ? "mh-down" : "";
+}
+
 /** The move since the session's open, TradingView's way: points, then percent, in the move's colour. */
-function Change({ value, from }: Readonly<{ value: number | null | undefined; from: number | null | undefined }>) {
+function Change({ value, from, toned = true }: Readonly<{ value: number | null | undefined; from: number | null | undefined; toned?: boolean }>) {
   if (value == null || from == null || !Number.isFinite(value) || !Number.isFinite(from) || from === 0) return null;
   const d = value - from;
   const sign = d > 0 ? "+" : d < 0 ? "−" : "";
-  const tone = d > 0 ? "mh-up" : d < 0 ? "mh-down" : "";
   return (
-    <span className={`mh-legend-value ${tone}`}>
+    <span className={toned ? `mh-legend-value ${toneOf(value, from)}` : "mh-legend-value"}>
       {sign}
       {fmt2(Math.abs(d))} ({sign}
       {((Math.abs(d) / Math.abs(from)) * 100).toFixed(2)}%)

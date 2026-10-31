@@ -497,6 +497,8 @@ export function StraddlePage({
                     return { strike: p.strike, colour: p.colour, value: hoverTime !== null ? line?.byTime.get(hoverTime) ?? null : line?.last ?? null, first: line?.first ?? null };
                   })}
                   onRemovePick={(strike) => togglePick(pick.underlying.id, pick.expiry, strike)}
+                  // Open while today's minutes keep arriving: a stray minute (a weekend tick) is not a market.
+                  trading={live && !closedDay && last !== undefined && Date.now() - last.t < 3 * 60_000}
                 />
               }
               showVix={!pick.underlying.id.startsWith("mcx:")}
