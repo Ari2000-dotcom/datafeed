@@ -1,29 +1,32 @@
 /*
- * The desk as plates: each container lifts off a lighter workspace by tone alone, a 6px corner,
- * 6px of workspace between two and round the desk. No shadow.
+ * The chart grid (shell/Workspace.tsx) as QuantDesk's containers (theme/dock.css there, its
+ * standard look): each chart a plate of the chart's ground on the workspace tone, a 3px gutter
+ * between two, a 6px corner each.
  *
- * A container holding one panel has one header line: the panel's own strip, lifted into the
- * dock's header (shell/headerSlot.tsx) as the plate's top, with the drag grip and the
- * container's buttons at its end. A container holding several keeps its tab row over the
- * workspace, its active tab the plate's own colour, joined to the plate like a folder's tab.
+ * Each plate wears a folder tab naming it (`DeskTab`, dockview's `defaultTabComponent`, drawn as
+ * `.mh-tab`): the tab alone carries the plate's ground, with the workspace showing beside it, and
+ * runs into the plate with no line between them. The plate is square at the corner the tab opens
+ * from, so the tab's left edge carries straight down into the plate's. No tab actions: panels are
+ * fixed by the layout picker, never opened or closed one at a time.
  *
- * The focused container is framed in the accent blue, its active tab (or its header line) and its
- * plate as one outline, the rest frameless, so which one takes the keys is plain at a glance.
+ * The selected container is framed in the accent, tab and plate as one outline, only where there
+ * is more than one chart to tell it from: QuantDesk's mark for "the one the toolbar drives".
+ *
+ * Each cell pads its right and bottom by the gutter, and the host reaches that far past the chart
+ * column (styles.css `.mh-dock-host`), so the outer plates line up with the regions round them and
+ * two plates side by side keep one gutter between them, on whole pixels.
  */
 
 .mh-dock {
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: transparent;
   --dv-tabs-and-actions-container-height: var(--mh-dock-tab-h);
-  --dv-tabs-and-actions-container-font-size: var(--mh-size-caption);
+  /* A cell holds one chart, so its tab is always the visible one: the plate's own ground. */
   --dv-activegroup-visiblepanel-tab-background-color: var(--mh-bg);
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--mh-bg);
-  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
-  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
   --dv-activegroup-visiblepanel-tab-color: var(--mh-text-strong);
   --dv-inactivegroup-visiblepanel-tab-color: var(--mh-text-secondary);
-  --dv-activegroup-hiddenpanel-tab-color: var(--mh-text-tertiary);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--mh-text-tertiary);
+  /* The library rings a tab on any focus, mouse included; the keyboard's ring is below. */
   --dv-tab-divider-color: transparent;
   --dv-separator-border: transparent;
   --dv-drag-over-background-color: color-mix(in srgb, var(--mh-dock-accent) 18%, transparent);
@@ -31,201 +34,117 @@
   --dv-active-sash-color: transparent;
   --dv-active-sash-transition-delay: 120ms;
   --dv-active-sash-transition-duration: var(--mh-dur-fast);
-  --dv-icon-hover-background-color: var(--mh-surface-2);
   height: 100%;
   width: 100%;
   background: var(--mh-workspace);
   font-family: var(--mh-font);
 }
 
-/* Each container held off its neighbours by the gutter: the workspace shows between them. */
 .mh-dock .dv-view-container .dv-view:has(> .dv-groupview) {
-  padding: var(--mh-dock-gutter);
+  padding: 0 var(--mh-dock-gutter) var(--mh-dock-gutter) 0;
   box-sizing: border-box;
 }
 
 .mh-dock .dv-groupview {
   border: 0;
-  overflow: hidden;
   background: transparent;
+  contain: layout paint;
 }
 
-/* The plate: tone alone against the workspace, rounded but for the corner the first tab opens
-   from, where its active tab's own top corners carry on the same curve. */
+/* -- the plate ------------------------------------------------------------------------------- */
+
 .mh-dock .dv-groupview > .dv-content-container {
   position: relative;
+  /* Its own stacking context: the frame below stays under the tab strip, which covers it under
+     the tab. */
   z-index: 0;
-  border: 1px solid var(--mh-plate-edge);
-  border-radius: 0 var(--mh-dock-radius) var(--mh-dock-radius) var(--mh-dock-radius);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
+  border-radius: 0 var(--mh-dock-radius) var(--mh-dock-radius) var(--mh-dock-radius);
   background: var(--mh-bg);
-  contain: layout paint;
+}
+
+/* The frame: drawn over the plate rather than as its border, so the chart inside keeps its size
+   whichever container is selected. At rest it is the tone's plate edge (a hairline on charcoal,
+   none on the others). */
+.mh-dock .dv-groupview > .dv-content-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 1px solid var(--mh-plate-edge);
+  border-radius: inherit;
+  pointer-events: none;
   transition: border-color var(--mh-dur) var(--mh-ease);
 }
-/* The focused container's frame: a blue edge round its plate. */
-.mh-dock .dv-groupview.dv-active-group > .dv-content-container {
+.mh-dock:has(.dv-view + .dv-view) .dv-groupview.dv-active-group > .dv-content-container::after {
   border-color: var(--mh-dock-accent);
 }
 
-/* -- the tab strip -------------------------------------------------------------------------- */
+/* -- the tab --------------------------------------------------------------------------------- */
 
+/* The strip lies a pixel over the plate's top row, so the tab's fill covers the frame's top edge
+   under the tab and nowhere else: the frame runs from the tab into the plate unbroken. */
 .mh-dock .dv-groupview > .dv-tabs-and-actions-container {
   position: relative;
   z-index: 1;
+  flex: 0 0 auto;
   height: var(--mh-dock-tab-h);
   min-height: var(--mh-dock-tab-h);
-  max-width: 100%;
   margin-bottom: -1px;
+  padding: 0;
+  border: 0;
   background: transparent;
 }
-.mh-dock .dv-tabs-and-actions-container .dv-tabs-container {
+.mh-dock .dv-tabs-container {
+  gap: 0;
   scrollbar-width: none;
 }
 
-/* Tabs share a narrow container's row, each title cut with an ellipsis, rather than the active one
-   being pushed out of sight past the row's end. */
-.mh-dock .dv-tabs-container > .dv-tab {
-  flex: 0 1 auto;
-  min-width: 64px;
-}
+/* The frame's top and sides, open at the bottom: no bottom border at all (a transparent one
+   mitres the side's last pixel into a notch), its pixel given to padding so the title stays put. */
 .mh-dock .dv-tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  height: var(--mh-dock-tab-h);
-  padding: 0 6px 0 12px;
-  font-size: var(--mh-size-caption);
-  font-weight: var(--mh-weight-regular);
+  min-width: 0;
+  border: 1px solid var(--mh-plate-edge);
+  border-bottom-width: 0;
+  padding-bottom: 1px;
+  border-radius: var(--mh-dock-radius) var(--mh-dock-radius) 0 0;
   cursor: pointer;
-  transition: background-color var(--mh-dur) var(--mh-ease), color var(--mh-dur) var(--mh-ease), box-shadow var(--mh-dur) var(--mh-ease);
+  transition: border-color var(--mh-dur) var(--mh-ease), color var(--mh-dur) var(--mh-ease);
 }
-.mh-dock .dv-tab.dv-active-tab {
-  z-index: 2;
-  border-top-left-radius: var(--mh-dock-radius);
-  border-top-right-radius: var(--mh-dock-radius);
+.mh-dock:has(.dv-view + .dv-view) .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  border-color: var(--mh-dock-accent);
 }
-/* The focused container: its active tab carries the blue frame's top edge, open at the bottom
-   so the frame runs on unbroken into the plate under it. */
-.mh-dock .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
-  box-shadow:
-    inset 0 1px 0 var(--mh-dock-accent),
-    inset 1px 0 0 var(--mh-dock-accent),
-    inset -1px 0 0 var(--mh-dock-accent);
-}
-
-/* Pointing at a tab that is not the active one lifts it toward the active tab: strong text and an
-   edge in grey, with no fill at all, so the ground behind shows through.
-   The long selector is to outrank the library's own tab colours, which a group's state sets. */
-.mh-dock .dv-groupview .dv-tabs-and-actions-container .dv-tabs-container .dv-tab.dv-inactive-tab:hover {
-  background: transparent;
+/* Pointing at another chart's tab: a grey frame and the strong ink, saying a click selects it. */
+.mh-dock .dv-groupview.dv-inactive-group .dv-tab:hover {
+  border-color: var(--mh-tab-hover-edge);
   color: var(--mh-text-strong);
-  border-top-left-radius: var(--mh-dock-radius);
-  border-top-right-radius: var(--mh-dock-radius);
-  box-shadow:
-    inset 0 1px 0 var(--mh-text-disabled),
-    inset 1px 0 0 var(--mh-text-disabled),
-    inset -1px 0 0 var(--mh-text-disabled);
+}
+.mh-dock .dv-tab:focus-visible::after {
+  outline-color: var(--mh-focus) !important;
+  border-radius: inherit;
 }
 
-/* A tab's insides (shell/Workspace.tsx `DeskTab`): icon, title, a close button that holds its
-   room while hidden, so the tab never changes width under the pointer. */
-.mh-tab {
+/* The tab's insides: drawn by `DeskTab` (shell/Workspace.tsx) as plain markup. */
+.mh-dock .mh-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
   height: 100%;
   min-width: 0;
-  max-width: 240px;
-}
-.mh-tab-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  opacity: 0.7;
-}
-.dv-active-tab .mh-tab-icon,
-.dv-tab:hover .mh-tab-icon {
-  opacity: 1;
+  max-width: 280px;
+  padding: 0 10px;
+  font-size: var(--mh-size-caption);
+  font-weight: var(--mh-weight-regular);
+  white-space: nowrap;
 }
 .mh-tab-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mh-tab-close {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--mh-dur-fast) var(--mh-ease), background-color var(--mh-dur-fast) var(--mh-ease);
-}
-.dv-tab:hover .mh-tab-close,
-.mh-tab-close:focus-visible {
-  opacity: 0.75;
-}
-.mh-tab-close:hover {
-  opacity: 1;
-  background: var(--mh-surface-3);
 }
 
-/* The strip's empty part washes on hover and shows its buttons: "+" straight after the tabs,
-   the split buttons at the end. Faded, never removed, so the tabs do not shift. */
-.mh-dock .dv-tabs-and-actions-container > :is(.dv-left-actions-container, .dv-void-container, .dv-right-actions-container) {
-  transition: background-color var(--mh-dur-fast) var(--mh-ease);
-}
-.mh-dock .dv-tabs-and-actions-container:hover > :is(.dv-left-actions-container, .dv-void-container, .dv-right-actions-container) {
-  background: var(--mh-hover-wash);
-}
-.mh-header-add,
-.mh-header-split {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 100%;
-  padding: 0 4px;
-}
-/* The container's buttons end 8px in from its edge, as the strip starts 12px in from the other. */
-.mh-header-split {
-  padding-right: 8px;
-  opacity: 1;
-  transition: opacity var(--mh-dur-fast) var(--mh-ease);
-}
-.mh-dock .dv-tabs-and-actions-container:hover :is(.mh-header-add, .mh-header-split),
-:is(.mh-header-add, .mh-header-split):focus-within {
-  opacity: 1;
-}
-.mh-dock-btn {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--mh-radius-small);
-  background: transparent;
-  color: var(--mh-text-secondary);
-  cursor: pointer;
-  transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
-}
-.mh-dock-btn:hover:not(:disabled) {
-  background: var(--mh-surface-2);
-  color: var(--mh-text-strong);
-}
-.mh-dock-btn:active:not(:disabled),
-.mh-tab-caret:active,
-.mh-tab-close:active {
-  background: var(--mh-surface-3);
-}
-
-/* -- the splitter: the whole gap between two containers grabs it --------------------------- */
+/* -- the splitter: the whole gutter between two charts grabs it ------------------------------ */
 
 .mh-dock .dv-sash {
   background: transparent;
@@ -234,132 +153,32 @@
   content: "";
   position: absolute;
 }
-/* The hairline is too thin to grab: the splitter takes 3px either side of it. */
+/* The sash sits on the cell boundary, the gutter just before it: the grab area covers both. */
 .mh-dock .dv-horizontal > .dv-sash-container > .dv-sash::before {
-  inset: 0 -3px;
+  inset: 0 -1px 0 -5px;
 }
 .mh-dock .dv-vertical > .dv-sash-container > .dv-sash::before {
-  inset: -3px 0;
+  inset: -5px 0 -1px 0;
 }
-/* Resizing shows no line: the divider stays invisible under the pointer, the cursor says where it is. */
+/* Resizing shows no line: the gutter stays the gutter, the cursor says where it is. */
 .mh-dock .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:hover,
 .mh-dock .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:active {
   background-color: transparent;
 }
 
-/* -- a container arriving: it grows in, its tab a touch behind ------------------------------- */
+/* -- a chart arriving: a fade only ----------------------------------------------------------- */
 
-/* A fade only: a scale would resample the charts' canvases while they draw their first frames,
-   and a chart arriving squeezed and soft is what it looked like. */
+/* A scale would resample the chart's canvases while they draw their first frames. */
 @keyframes mh-panel-in {
   from {
     opacity: 0;
   }
 }
-@keyframes mh-tab-in {
-  from {
-    opacity: 0;
-  }
-}
-.mh-dock .dv-groupview.mh-entering > .dv-content-container {
+.mh-dock .dv-groupview.mh-entering {
   animation: mh-panel-in 220ms var(--mh-ease-out) backwards;
 }
-.mh-dock .dv-groupview.mh-entering .dv-tab {
-  animation: mh-tab-in var(--mh-dur) var(--mh-ease-out) 60ms backwards;
-}
 @media (prefers-reduced-motion: reduce) {
-  .mh-dock .dv-groupview.mh-entering > .dv-content-container,
-  .mh-dock .dv-groupview.mh-entering .dv-tab {
+  .mh-dock .dv-groupview.mh-entering {
     animation: none;
   }
-}
-
-/* The caret after a tab's title: change what the container shows. */
-.mh-tab-caret {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--mh-text-tertiary);
-  cursor: pointer;
-  transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
-}
-.mh-tab-caret:hover {
-  background: var(--mh-surface-3);
-  color: var(--mh-text-strong);
-}
-.mh-dock-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* -- one header line: a single panel's strip in its container's header -------------------------- */
-
-/* The header line is the plate's top: the plate's colour, its top corners rounded, edged as the
-   plate is; the plate under it squares its own top to meet it. */
-.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) {
-  height: var(--mh-strip-h);
-  min-height: var(--mh-strip-h);
-  margin-bottom: 0;
-  border: 1px solid var(--mh-plate-edge);
-  border-bottom-color: var(--mh-strip-edge);
-  border-radius: var(--mh-dock-radius) var(--mh-dock-radius) 0 0;
-  background: var(--mh-bg);
-  transition: border-color var(--mh-dur) var(--mh-ease);
-}
-.mh-dock .dv-groupview:has(> .dv-tabs-and-actions-container .mh-header-slot:not(:empty)) > .dv-content-container {
-  border-top: 0;
-  border-radius: 0 0 var(--mh-dock-radius) var(--mh-dock-radius);
-}
-/* Focused: the header line takes the frame's top and sides, the plate the rest. */
-.mh-dock .dv-groupview.dv-active-group > .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) {
-  border-top-color: var(--mh-dock-accent);
-  border-left-color: var(--mh-dock-accent);
-  border-right-color: var(--mh-dock-accent);
-}
-.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) > .dv-tabs-container {
-  display: none;
-}
-.mh-dock .dv-tabs-and-actions-container > .dv-pre-actions-container:has(.mh-header-slot:not(:empty)) {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-/* The container's own buttons keep their room: the strip is what gives way, by its own rules. */
-.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) > :is(.dv-left-actions-container, .dv-right-actions-container) {
-  flex: none;
-}
-.mh-header-slot {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 100%;
-}
-/* The strip as the header: the header draws the rule under it, and its ground is the header's. */
-.mh-header-slot > .mh-in-header {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 100%;
-  min-height: 0;
-  border-bottom: 0;
-  background: transparent;
-}
-/* Its drag grip: the header's empty part, a short dotted column before the container's buttons. */
-.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)) > .dv-void-container {
-  flex: 0 0 12px;
-  background-image: radial-gradient(circle, var(--mh-text-disabled) 1px, transparent 1.2px);
-  background-size: 4px 4px;
-  background-position: center;
-  background-repeat: repeat-y;
-  background-clip: content-box;
-  padding: 10px 4px;
-  box-sizing: border-box;
-}
-.mh-dock .dv-tabs-and-actions-container:has(.mh-header-slot:not(:empty)):hover > :is(.dv-left-actions-container, .dv-void-container, .dv-right-actions-container) {
-  background-color: transparent;
 }

@@ -1,9 +1,7 @@
 /*
- * The page, styled once on the tokens in theme/tokens.css. QuantDesk's
- * structure: the nav bar on top, then one container on the workspace, held off
- * its edges by a narrow gutter. The container has one 36px header strip (what
- * is drawn on the left, quiet readouts on the right) and the chart runs flush
- * under it to the container's edges.
+ * The page, styled once on the tokens in theme/tokens.css, TradingView's desk: one toolbar across
+ * the top, the tools bar down the left, the chart grid with the bottom panel and the footer under
+ * it, and the side panel with its rail on the right, every region a plate on the workspace tone.
  */
 
 *,
@@ -111,54 +109,80 @@ input {
   }
 }
 
-/* -- the app frame --------------------------------------------------------- */
+/* -- the app frame: the app bar, then the page --------------------------------------------- */
 
 .mh-app {
-  display: grid;
-  grid-template-rows: var(--mh-titlebar-h) minmax(0, 1fr);
-  height: 100%;
-}
-
-.mh-main {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* Measured for dockview's explicit relayout on a fullscreen transition (shell/Workspace.tsx). */
-.mh-dock-host {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-  /* Room under the title bar, at the foot and at the sides, on the desk's ground. */
-  padding: 3px;
-  box-sizing: border-box;
+  height: 100%;
   background: var(--mh-workspace);
 }
 
-.mh-titlebar {
+/* -- the app bar (shell/AppBar.tsx): the site's frame, edge to edge --------------------------
+   The chrome's darkest tone with a hairline under it, so the plates of the page read as the work
+   and the bar as the frame: the menu and the mark, the pages as tabs, and at the right what holds
+   for every page. */
+.mh-appbar {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
-  padding: 0 8px 0 16px;
-  background: var(--mh-chrome);
+  gap: 2px;
+  height: var(--mh-appbar-h);
+  padding: 0 6px 0 4px;
   border-bottom: 1px solid var(--mh-line-strong);
+  background: var(--mh-chrome);
+  overflow: hidden;
+  white-space: nowrap;
+  --mh-text-tertiary: var(--mh-text-secondary);
 }
-
-.mh-brand {
+.mh-appbar-btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
+  color: var(--mh-text-strong);
+  cursor: pointer;
+  transition: background-color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-appbar-btn:hover,
+.mh-appbar-btn[aria-expanded="true"] {
+  background: var(--mh-surface-2);
+}
+.mh-appbar-btn:active {
+  background: var(--mh-surface-3);
+}
+.mh-appbar .mh-icon-btn {
+  width: 30px;
+  height: 28px;
+  border-radius: var(--mh-radius-small);
+  color: var(--mh-text-strong);
+}
+.mh-appbar .mh-icon-btn:hover,
+.mh-appbar .mh-icon-btn[aria-expanded="true"] {
+  background: var(--mh-surface-2);
+}
+/* The mark: the logo and the wordmark, home on a click. */
+.mh-appbar-brand {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 9px;
-  margin-right: 20px;
-  color: var(--mh-text-strong);
-  font-size: var(--mh-size-body);
-  font-weight: var(--mh-weight-emphasis);
-  white-space: nowrap;
+  height: 28px;
+  margin: 0 18px 0 4px;
+  padding: 0 4px;
+  border-radius: var(--mh-radius-small);
+  color: inherit;
+  text-decoration: none;
 }
-
+.mh-appbar-brand:focus-visible {
+  outline: 2px solid var(--mh-focus);
+  outline-offset: 0;
+}
 .mh-logo {
   flex: 0 0 auto;
   display: block;
@@ -166,35 +190,37 @@ input {
 /* The logo's colours in words: "Alpha" in the strong ink, "Hedge" in the logo's violet. */
 .mh-wordmark {
   color: var(--mh-text-strong);
+  font-size: var(--mh-size-title);
+  font-weight: var(--mh-weight-strong);
+  white-space: nowrap;
 }
 .mh-wordmark-hedge {
   color: var(--mh-logo-violet);
 }
-
-.mh-nav {
+/* The pages: words a step quieter than the open one, which is underlined in the accent on the
+   bar's foot, as a professional site marks where you are. */
+.mh-appnav {
   display: flex;
   align-self: stretch;
+  gap: 2px;
 }
-.mh-nav-item {
+.mh-appnav-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  color: var(--mh-text-tertiary);
+  padding: 0 12px;
+  color: var(--mh-text-secondary);
   font-size: var(--mh-size-body);
-  font-weight: var(--mh-weight-emphasis);
-  white-space: nowrap;
+  text-decoration: none;
   transition: color var(--mh-dur-fast) var(--mh-ease);
 }
-.mh-nav-item:hover,
-.mh-nav-item[aria-current="page"] {
+.mh-appnav-item:hover {
   color: var(--mh-text-strong);
 }
-.mh-nav-item[aria-current="page"]::after {
+.mh-appnav-item[aria-current="page"] {
+  color: var(--mh-text-strong);
+}
+.mh-appnav-item[aria-current="page"]::after {
   content: "";
   position: absolute;
   left: 12px;
@@ -203,6 +229,628 @@ input {
   height: 2px;
   border-radius: 2px 2px 0 0;
   background: var(--mh-accent);
+}
+.mh-appnav-item:focus-visible {
+  outline: 2px solid var(--mh-focus);
+  outline-offset: -4px;
+  border-radius: var(--mh-radius-small);
+}
+.mh-appbar .mh-ticker {
+  margin-right: 4px;
+}
+.mh-appbar-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--mh-line-strong);
+}
+
+/* -- the Charts page: TradingView's desk ---------------------------------------------------- */
+
+/* Every region a plate on the workspace tone, one gutter between two and round the edge: the
+   chart toolbar across the top; the tools bar, the chart column, the side panel (when open) and
+   the rail under it. */
+.mh-desk {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: var(--mh-rail-w) minmax(0, 1fr) var(--mh-rail-w);
+  grid-template-rows: var(--mh-toolbar-h) minmax(0, 1fr);
+  grid-template-areas:
+    "top top top"
+    "tools center rail";
+  gap: var(--mh-gap);
+  min-height: 0;
+  padding: var(--mh-gap);
+}
+.mh-desk[data-side] {
+  grid-template-columns: var(--mh-rail-w) minmax(0, 1fr) auto var(--mh-rail-w);
+  grid-template-areas:
+    "top top top top"
+    "tools center side rail";
+}
+
+/* -- the Option chain page (shell/ChainPage.tsx): the chain wide, Delta × OI beside it --------- */
+
+.mh-chainpage {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--mh-gap);
+  min-height: 0;
+  padding: var(--mh-gap);
+}
+.mh-chainpage-pane {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+.mh-chainpage-pane > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .mh-chainpage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.mh-plate {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--mh-plate-edge);
+  border-radius: var(--mh-dock-radius);
+  background: var(--mh-bg);
+}
+
+/* The chrome reads at a glance: nothing in the toolbar, the bars or the footer sits below the
+   secondary ink, since the tertiary grey reads as haze at 12-13px on the plate. Menus open
+   outside them (`Popover`) and keep theirs. */
+.mh-toolbar,
+.mh-tools,
+.mh-rail,
+.mh-footer {
+  --mh-text-tertiary: var(--mh-text-secondary);
+}
+
+/* The chart column: the grid, the bottom panel when open, the footer. */
+.mh-center {
+  grid-area: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mh-gap);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The grid's host reaches one gutter past the column's right and bottom edges, where each cell
+   pads its own (theme/dock.css), so the outer charts line up with the regions round them. Measured
+   for dockview's explicit relayout on a fullscreen transition (shell/Workspace.tsx). */
+.mh-dock-host {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--mh-dock-gutter)) calc(-1 * var(--mh-dock-gutter)) 0;
+  overflow: hidden;
+}
+
+/* -- the top toolbar ------------------------------------------------------------------------ */
+
+.mh-toolbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  overflow: hidden;
+}
+/* The active chart's controls (shell/headerSlot.tsx): its strip, laid flat in the toolbar. */
+.mh-toolbar-slot {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+.mh-toolbar-slot > .mh-in-toolbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+/* -- the tools bar and the rail: a column of square buttons ----------------------------------- */
+
+.mh-tools,
+.mh-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 0;
+}
+.mh-tools {
+  grid-area: tools;
+}
+.mh-rail {
+  grid-area: rail;
+}
+.mh-tool-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
+  color: var(--mh-text-strong);
+  cursor: pointer;
+  transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-tool-btn:hover {
+  background: var(--mh-surface-2);
+}
+.mh-tool-btn:active {
+  background: var(--mh-surface-3);
+}
+/* The tool in use, the panel open: the accent's ink on its own faint wash. */
+.mh-tool-btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--mh-accent) 16%, var(--mh-bg));
+  color: var(--mh-accent-text);
+}
+.mh-tools-sep {
+  flex: none;
+  width: 24px;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--mh-line-strong);
+}
+
+/* -- the side panel ------------------------------------------------------------------------- */
+
+.mh-side {
+  grid-area: side;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+/* Its left edge drags it: the grip covers the gutter and the panel's first pixels. */
+.mh-side-grip {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * var(--mh-gap) - 2px);
+  width: calc(var(--mh-gap) + 6px);
+  cursor: col-resize;
+}
+.mh-side-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0 0 var(--mh-dock-radius) var(--mh-dock-radius);
+}
+.mh-side-body > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* A panel's header line: its name in the one heavier weight, its close at the end. */
+.mh-panel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--mh-strip-edge);
+}
+/* A panel that can be dragged onto the charts (Delta × OI): its whole title row is the handle. */
+.mh-panel-head[data-draggable] {
+  cursor: grab;
+}
+.mh-panel-head[data-draggable]:active {
+  cursor: grabbing;
+}
+.mh-panel-title {
+  color: var(--mh-text-strong);
+  font-size: var(--mh-size-body);
+  font-weight: var(--mh-weight-strong);
+  white-space: nowrap;
+}
+.mh-panel-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
+  color: var(--mh-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-panel-close:hover {
+  background: var(--mh-surface-2);
+  color: var(--mh-text-strong);
+}
+
+/* -- the bottom panel and the footer -------------------------------------------------------- */
+
+.mh-bottom {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+/* Its top edge drags it: the grip covers the gutter and the panel's first pixels. */
+.mh-bottom-grip {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--mh-gap) - 2px);
+  height: calc(var(--mh-gap) + 6px);
+  cursor: row-resize;
+}
+.mh-bottom-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--mh-dock-radius);
+}
+.mh-bottom-body > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* A drag in progress keeps its cursor and selects nothing, wherever the pointer strays. */
+html[data-resizing] {
+  user-select: none;
+}
+html[data-resizing="x"] * {
+  cursor: col-resize !important;
+}
+html[data-resizing="y"] * {
+  cursor: row-resize !important;
+}
+
+.mh-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: var(--mh-footer-h);
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.mh-footer-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+/* A tab at rest is quiet ink on nothing; pointed at, a wash; its panel open, the accent's wash and
+   ink, the mark a tool that is on carries in the tools bar (`.mh-tool-btn[aria-pressed]`), so an
+   open panel never reads as one merely hovered. */
+.mh-footer-tab {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-control);
+  cursor: pointer;
+  transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-footer-tab:hover {
+  background: var(--mh-hover-wash);
+  color: var(--mh-text-strong);
+}
+.mh-footer-tab:active {
+  background: var(--mh-surface-2);
+}
+.mh-footer-tab[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--mh-accent) 16%, var(--mh-bg));
+  color: var(--mh-accent-text);
+}
+.mh-footer-tab[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--mh-accent) 22%, var(--mh-bg));
+}
+.mh-footer-tab:focus-visible {
+  outline: 2px solid var(--mh-focus);
+  outline-offset: -2px;
+}
+.mh-footer .mh-panel-close {
+  width: 22px;
+  height: 22px;
+}
+/* The time in India, to the second, its zone a step quieter. */
+.mh-clock {
+  padding: 0 8px 0 10px;
+  border-left: 1px solid var(--mh-line-strong);
+  color: var(--mh-text-primary);
+  font-size: var(--mh-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.mh-clock-zone {
+  color: var(--mh-text-tertiary);
+}
+
+/* -- the measure tool (chart/MeasureLayer.tsx) ----------------------------------------------- */
+
+.mh-measure {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  cursor: crosshair;
+}
+.mh-measure-box {
+  position: absolute;
+  background: color-mix(in srgb, var(--mh-accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mh-accent) 70%, transparent);
+  pointer-events: none;
+}
+.mh-measure-box[data-tone="down"] {
+  background: color-mix(in srgb, var(--mh-down) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mh-down) 70%, transparent);
+}
+/* Its reading in a filled box of the tone, under the box when the drag went down, over it else. */
+.mh-measure-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  width: max-content;
+  translate: -50% 0;
+  padding: 3px 8px;
+  border-radius: var(--mh-radius-small);
+  background: var(--mh-accent);
+  color: #ffffff;
+  font-size: var(--mh-size-caption);
+  line-height: 16px;
+  white-space: nowrap;
+}
+.mh-measure-label[data-below] {
+  top: calc(100% + 6px);
+  bottom: auto;
+}
+.mh-measure-box[data-tone="down"] .mh-measure-label {
+  background: var(--mh-down);
+}
+
+/* -- the menu drawer (shell/NavDrawer.tsx) ------------------------------------------------------ */
+
+/* Over the desk, never beside it: the charts keep their room whether it is open or shut. It slides
+   in from the left edge over a dimmed desk; shut, it is out of sight and out of the keys' way. At
+   rest it carries no transform, so its words render as sharp as the toolbar's. */
+.mh-nav-scrim {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--mh-dur) var(--mh-ease), visibility 0s linear var(--mh-dur);
+}
+.mh-nav-scrim[data-open] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--mh-dur) var(--mh-ease);
+}
+.mh-nav {
+  position: fixed;
+  z-index: 61;
+  top: var(--mh-gap);
+  bottom: var(--mh-gap);
+  left: var(--mh-gap);
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  max-width: calc(100vw - 2 * var(--mh-gap));
+  border: 1px solid var(--mh-line-strong);
+  border-radius: var(--mh-dock-radius);
+  background: var(--mh-bg);
+  box-shadow: var(--mh-shadow-pop);
+  transform: translateX(calc(-100% - 2 * var(--mh-gap)));
+  visibility: hidden;
+  transition: transform 220ms var(--mh-ease-out), visibility 0s linear 220ms;
+}
+.mh-nav[data-open] {
+  transform: none;
+  visibility: visible;
+  transition: transform 220ms var(--mh-ease-out);
+}
+.mh-nav-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  height: 46px;
+  padding: 0 8px 0 14px;
+}
+/* Groups set apart by room alone, on an 8px rhythm: a quiet title, then its controls. */
+.mh-nav-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 8px 12px;
+}
+.mh-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mh-nav-title {
+  margin: 0 0 4px;
+  padding: 0 8px;
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-caption);
+  font-weight: var(--mh-weight-regular);
+}
+
+/* A segmented control: the choices side by side in one sunken track, the one in use raised. */
+.mh-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--mh-radius);
+  background: var(--mh-surface-1);
+  box-shadow: inset 0 0 0 1px var(--mh-line);
+}
+.mh-seg + .mh-nav-row {
+  margin-top: 4px;
+}
+.mh-seg-btn {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-control);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-seg-btn:hover {
+  color: var(--mh-text-strong);
+}
+.mh-seg-btn[aria-checked="true"] {
+  background: var(--mh-surface-3);
+  color: var(--mh-text-strong);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 25%);
+}
+/* A tone's chip, painted by that tone's own tokens: its workspace beside its chart plate. */
+.mh-seg-swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--mh-workspace) 50%, var(--mh-bg) 50%);
+  box-shadow: inset 0 0 0 1px var(--mh-line-strong);
+}
+
+/* The chart layouts, all eight in one row of their pictures, the one in use in the accent. */
+.mh-nav-layouts {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+}
+.mh-nav-layout {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
+  color: var(--mh-text-primary);
+  cursor: pointer;
+  transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-nav-layout .mh-glyph {
+  color: inherit;
+}
+.mh-nav-layout:hover {
+  background: var(--mh-surface-2);
+  color: var(--mh-text-strong);
+}
+.mh-nav-layout[aria-checked="true"] {
+  background: color-mix(in srgb, var(--mh-accent) 16%, var(--mh-bg));
+  color: var(--mh-accent-text);
+}
+
+/* A row: its mark, its name, a count at the end where it has one; one line, 32px. In use: the
+   accent's faint wash with the mark in the accent, as the tools bar marks its tool. */
+.mh-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
+  color: var(--mh-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--mh-dur-fast) var(--mh-ease), color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-nav-row > svg {
+  flex: none;
+}
+.mh-nav-row .mh-glyph {
+  color: inherit;
+}
+.mh-nav-row:hover {
+  background: var(--mh-surface-2);
+  color: var(--mh-text-strong);
+}
+.mh-nav-row:active {
+  background: var(--mh-surface-3);
+}
+.mh-nav-row[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--mh-accent) 14%, var(--mh-bg));
+  color: var(--mh-text-strong);
+}
+.mh-nav-row[aria-pressed="true"] > svg {
+  color: var(--mh-accent-text);
+}
+.mh-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--mh-size-control);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mh-nav-count {
+  flex: none;
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.mh-nav-empty {
+  margin: 0;
+  padding: 0 8px;
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-control);
+  line-height: 32px;
+}
+.mh-nav-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border-top: 1px solid var(--mh-line);
+  color: var(--mh-text-primary);
+  font-size: var(--mh-size-caption);
+}
+.mh-nav-build {
+  color: var(--mh-text-secondary);
 }
 
 /* The indices: name quiet, price strong, the day's move in its colour. */
@@ -361,6 +1009,15 @@ input {
   min-height: var(--mh-strip-h);
   padding: 0 12px;
   border-bottom: 1px solid var(--mh-strip-edge);
+  /* Nothing on a chart's toolbar sits below the secondary ink: the tertiary grey (the readouts'
+     labels, days to expiry, chevrons) read as haze at 12-13px on the plate, so the strip lifts
+     that tier a step. Menus open outside it (`Popover`) and keep theirs. */
+  --mh-text-tertiary: var(--mh-text-secondary);
+}
+/* A badge on the strip (the exchange, ATM): its 11px caps in the primary ink, clear on its grey. */
+.mh-strip .mh-chip,
+.mh-strip .mh-chipbox > em {
+  color: var(--mh-text-primary);
 }
 
 .mh-container-body {
@@ -370,18 +1027,6 @@ input {
   min-height: 0;
   overflow: hidden;
 }
-.mh-container-body::before {
-  content: "";
-  position: absolute;
-  z-index: 4;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--mh-strip-cast);
-  pointer-events: none;
-}
-
 .mh-chip {
   display: inline-flex;
   align-items: center;
@@ -406,33 +1051,48 @@ input {
   border-radius: 1.5px;
 }
 
-/* -- the scrip chart's toolbar, TradingView's way ----------------------------------------------
-   Quiet: regular-weight text a step below full strength, a faint wash on hover, a thin rule
-   between groups, and a chevron only where the pick is a list worth opening (the symbol, the
-   expiry). */
-.mh-tv-strip {
-  gap: 0;
-}
-.mh-tv-strip .mh-picker {
+/* -- the toolbar's controls, TradingView's way ------------------------------------------------
+   Flat: strong text on the plate, a solid step lighter on hover, a thin rule between groups, and a
+   chevron only where the pick is a list worth opening (the symbol, the expiry). */
+.mh-toolbar .mh-picker {
   height: 30px;
   padding: 0 8px;
-  color: var(--mh-text-primary);
-}
-.mh-tv-strip .mh-picker-value {
-  font-weight: var(--mh-weight-regular);
-}
-.mh-tv-strip .mh-picker:hover,
-.mh-tv-strip .mh-picker[aria-expanded="true"] {
-  background: var(--mh-hover-wash);
   color: var(--mh-text-strong);
 }
-.mh-tv-strip .mh-picker > svg {
-  width: 11px;
-  height: 11px;
-  opacity: 0.7;
+.mh-toolbar .mh-picker-value {
+  font-weight: var(--mh-weight-regular);
+}
+.mh-toolbar .mh-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--mh-radius-small);
+  color: var(--mh-text-strong);
+}
+.mh-toolbar :is(.mh-picker, .mh-icon-btn):hover,
+.mh-toolbar :is(.mh-picker, .mh-icon-btn)[aria-expanded="true"] {
+  background: var(--mh-surface-2);
+  color: var(--mh-text-strong);
 }
 .mh-tv-bare {
   display: contents;
+}
+/* A picker that shows only a picture (the chart type, the candle colours): the same 30px square as
+   the icon buttons beside it (Indicators, Layout), its picture centred, rather than a width of its own. */
+.mh-toolbar .mh-tv-bare .mh-picker {
+  justify-content: center;
+  min-width: 30px;
+  padding: 0 1px;
+}
+/* A piece of a strip that gives way as one when the row runs short (ui/fitRow.ts `data-drop`):
+   laid out like the strip's own items, gone entirely while hidden. */
+.mh-fit-piece {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: inherit;
+}
+.mh-fit-piece[hidden] {
+  display: none;
 }
 .mh-tv-bare .mh-picker > svg {
   display: none;
@@ -440,21 +1100,26 @@ input {
 .mh-tv-sep {
   flex: 0 0 auto;
   width: 1px;
-  height: 18px;
-  margin: 0 8px;
+  height: 20px;
+  margin: 0 6px;
   background: var(--mh-line-strong);
 }
 
-/* Indicators: TradingView's fx and the word; how many are on, quietly after it. */
-.mh-ind-trigger {
+/* The fx itself: a heavy italic serif f (the one glyph off the page's face) and a small regular x,
+   on one baseline. Type, so the system hints it as sharp as the strip's words; the f's weight
+   keeps its slanted stem a full pixel wide at 1x. */
+.mh-fx {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--mh-size-control);
+  align-items: baseline;
+  font-size: var(--mh-size-micro);
+  line-height: 1;
+  user-select: none;
 }
-.mh-ind-count {
-  color: var(--mh-text-tertiary);
-  font-size: var(--mh-size-caption);
+.mh-fx i {
+  font-family: Cambria, Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  font-style: italic;
+  font-weight: var(--mh-weight-strong);
 }
 
 /* The OI profile's views: one segmented control, its caption first, the view showing raised. */
@@ -652,7 +1317,8 @@ input {
   display: flex;
   flex-direction: column;
   min-width: 200px;
-  max-width: min(360px, calc(100vw - 16px));
+  /* Room for a row's 28px icon, its label and its note side by side (the OI profile's views). */
+  max-width: min(440px, calc(100vw - 16px));
   animation: mh-pop var(--mh-dur-pop) var(--mh-ease-out);
 }
 .mh-pop[data-up] {
@@ -775,11 +1441,18 @@ input {
   color: var(--mh-text-strong);
 }
 .mh-menu-note {
+  min-width: 0;
   margin-left: auto;
   padding-left: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--mh-text-tertiary);
   font-size: var(--mh-size-caption);
   white-space: nowrap;
+}
+/* A row with a note keeps its label whole: when the row runs short, the note gives way first. */
+.mh-menu-item:has(.mh-menu-note) .mh-menu-text {
+  flex-shrink: 0;
 }
 .mh-menu-item[aria-selected="true"] .mh-menu-note {
   color: var(--mh-text-secondary);
@@ -850,7 +1523,7 @@ input {
   outline-offset: -2px;
 }
 .mh-interval-trigger > svg {
-  opacity: 0.7;
+  color: var(--mh-text-tertiary);
   transition: transform var(--mh-dur) var(--mh-ease-out);
 }
 .mh-interval-trigger[aria-expanded="true"] > svg {
@@ -915,6 +1588,33 @@ input {
 .mh-readout-delta.mh-down {
   color: var(--mh-down);
 }
+/* The straddle chart's readout line (StraddlePage's `readouts`, StraddleChart places it): the
+   toolbar's readouts carried under it into the price pane's top-right corner, level with the
+   legend's first line, so the toolbar keeps its height. One plate of the chart's ground behind it,
+   the legend's opacity, so no line shows through a figure; it takes no pointer. */
+.mh-chart-readouts-anchor {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.mh-chart-readouts-anchor[data-collides] {
+  visibility: hidden;
+}
+.mh-chart-readouts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mh-bg) 85%, transparent);
+  font-size: var(--mh-size-control);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
 /* A readout or chip piece the measured fit has hidden (ui/fitRow.ts). */
 [data-drop][hidden] {
   display: none !important;
@@ -1044,6 +1744,21 @@ input {
   line-height: 1.5;
   text-wrap: balance;
 }
+/* A crash's own words, copyable off the screen; a long one wraps inside the note. */
+.mh-crash-message {
+  max-width: 100%;
+  color: var(--mh-text-secondary);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: var(--mh-size-control);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+/* The whole page given way: the note in the middle of the screen, on the page's own ground. */
+.mh-crash-page {
+  display: flex;
+  min-height: 100dvh;
+}
 .mh-quick {
   display: flex;
   flex-wrap: wrap;
@@ -1112,81 +1827,17 @@ input {
   cursor: pointer;
 }
 
-/* The strip stays one line however long the name or the prices: its readouts are measured and
-   the least needed give way first (ui/fitRow.ts, `data-drop`), IV, then the straddle's average,
-   then the CE and PE legs. A panel too narrow for the rest beside the pickers gives the readouts a
-   line of their own, measured the same way; in the slimmest, the straddle's move and then the ATM
-   strike give way too, and the straddle itself always stays. */
-@container (max-width: 600px) {
-  .mh-strip {
-    flex-wrap: wrap;
-    row-gap: 4px;
-    padding-top: 4px;
-    padding-bottom: 4px;
-  }
-  .mh-strip > .mh-spacer {
-    display: none;
-  }
-  .mh-strip .mh-readouts {
-    flex-basis: 100%;
-    padding: 2px 4px;
-  }
-}
-
-/* -- narrow windows: the strip wraps, readouts take their own row ------------- */
-
-@media (max-width: 900px) {
-  .mh-strip {
-    flex-wrap: wrap;
-    row-gap: 4px;
-    padding-top: 4px;
-    padding-bottom: 4px;
-  }
-  .mh-strip > .mh-spacer {
-    display: none;
-  }
-  .mh-readouts {
-    flex-basis: 100%;
-    padding: 2px 4px;
-    gap: 12px;
-  }
-}
-
+/* A phone keeps the readouts' pieces wrapping rather than cut. */
 @media (max-width: 640px) {
-  .mh-titlebar {
-    padding-left: 12px;
-  }
-  .mh-brand {
-    margin-right: 6px;
-  }
-  /* A phone keeps the bar's marks (the logo, the layout's picture) and drops their words, so the
-     fullscreen and canvas buttons stay on screen. */
-  .mh-nav,
-  .mh-wordmark,
-  .mh-layout-name {
-    display: none;
-  }
   .mh-readouts {
     flex-wrap: wrap;
     row-gap: 4px;
   }
 }
 
-/* The Layout menu's trigger: the layout's little picture and its name. */
-.mh-layout-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
+/* A layout's picture (ui/icons.tsx `ArrangementGlyph`). */
 .mh-glyph {
   flex: none;
   color: var(--mh-text-tertiary);
 }
 
-/* The "+" on a container's strip: what it opens, in a menu under it. */
-.mh-header-add {
-  position: relative;
-}
-.mh-header-add[data-open] {
-  opacity: 1;
-}

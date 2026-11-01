@@ -39,6 +39,7 @@ Every change is marked `MarketHub fork` in the source.
 | The bar countdown under the last-price tag in its own boxes, one per unit (`02m` `07s`, hours in front while an hour or more is left), a shade darker, not a second row inside the tag: the tag and the name box beside it stay one row on the price line, and tag spreading reserves the room for both | `render/axis.ts` (`COUNTDOWN_BOX_HEIGHT`, `countdownSegments`, `countdownBlockOffset`, `drawLastPriceTag`), `core/pane.ts` |
 | `timeScale.lockVisibleTimeRangeOnResize` (Lightweight Charts' option of that name, off by default): a new plot width keeps the bars in view and scales their spacing, rather than keeping the spacing. The app turns it on, so a chart fitted while its dock panel was still narrow fills the panel once it grows instead of staying squeezed to one side | `scale/time-scale.ts` |
 | `SeriesStyle.lastValueFollowsView` (off by default): while the latest bar is scrolled out of view to the right, a series' value tag and price line read the last bar in view, so a chart scrolled back still labels every line where it leaves the plot; back at the latest bar they read the latest again | `render/series-style.ts`, `core/pane.ts` (`lastBarInView`) |
+| `Chart.runCommand(command)`: a built-in command (`zoomIn`, `zoomOut`, `resetScale`, ...) run from the host's own toolbar, as its keyboard shortcut runs it; upstream kept the runner private | `core/chart.ts` |
 
 ## Taking a newer upstream release
 

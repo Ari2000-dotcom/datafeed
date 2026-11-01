@@ -1,6 +1,14 @@
 /* The option chain panel (option/ChainPanel.tsx), on the page's tokens. */
 
 .mh-chain {
+  /* QuantDesk's Classic chain (panels/chain/ChainTable.tsx there): hairlines in the strong ink,
+     the in-the-money side a warm grey lift whose meaning is carried by an amber edge at the strike. */
+  --mh-chain-hairline: color-mix(in srgb, var(--mh-text-strong) 9%, transparent);
+  --mh-chain-hairline-strong: color-mix(in srgb, var(--mh-text-strong) 14%, transparent);
+  --mh-chain-itm: color-mix(in srgb, var(--mh-amber) 3.5%, color-mix(in srgb, var(--mh-text-strong) 3.5%, transparent));
+  --mh-chain-itm-hover: color-mix(in srgb, var(--mh-amber) 3.5%, color-mix(in srgb, var(--mh-text-strong) 7.5%, transparent));
+  --mh-chain-itm-edge: color-mix(in srgb, var(--mh-amber) 24%, transparent);
+  --mh-chain-atm: color-mix(in srgb, var(--mh-text-strong) 4%, var(--mh-bg));
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -10,10 +18,11 @@
 }
 
 /*
- * The table, as AlphaHedge's chain draws it: a sticky header, 34 px rows, the strike in a band of
- * its own, in-the-money cells shaded (calls under spot, puts over it), the money strike underlined
- * in the brand colour, a wash under the pointer. Extra columns: the straddle at each strike with
- * its "+" (the compare), and each leg's IV when there is room.
+ * The table, QuantDesk's Classic chain on AlphaHedge's rows: a sticky heading on the container's
+ * own ground, 34 px rows with no rule between them, a hairline between each leg's IV and its
+ * price, the in-the-money side lifted up to the strike, the money row lifted with its strike in a
+ * chip, a wash under the pointer. Extra columns: the straddle at each strike with its "+" (the
+ * compare), and each leg's IV when there is room.
  */
 
 /* Its own layout and paint island: the chain's two hundred rows are relaid and repainted only for
@@ -74,6 +83,13 @@
 .mh-chain[data-compact] .mh-chain-table td.mh-straddle > i {
   margin-right: 6px;
 }
+/* A six-figure strike ("1,38,500") in its chip still inside the slim strike column. */
+.mh-chain[data-compact] .mh-chain-table tr.mh-atm td.mh-strike {
+  padding: 0 2px;
+}
+.mh-chain[data-compact] .mh-chain-table tr.mh-atm td.mh-strike > b {
+  padding: 0 4px;
+}
 
 .mh-chain-table th {
   position: sticky;
@@ -82,8 +98,8 @@
   height: 30px;
   padding: 0 12px;
   overflow: hidden;
-  border-bottom: 1px solid var(--mh-line);
-  background: var(--mh-head);
+  border-bottom: 1px solid var(--mh-chain-hairline);
+  background: var(--mh-bg);
   color: var(--mh-text-tertiary);
   font-size: var(--mh-size-caption);
   font-weight: var(--mh-weight-regular);
@@ -99,10 +115,12 @@
 }
 /* Cells stay unpositioned: a positioned cell is a paint layer of its own, and fifteen hundred of
    them made every frame of a splitter drag slow to paint and composite. */
+/* No rule between rows, as QuantDesk's Classic: the rule is kept, transparent, so a row stays the
+   34 px (border box) ChainPanel's ROW_H places it at. */
 .mh-chain-table td {
   height: 34px;
   padding: 0 12px;
-  border-bottom: 1px solid var(--mh-line);
+  border-bottom: 1px solid transparent;
   color: var(--mh-text-secondary);
   white-space: nowrap;
 }
@@ -119,13 +137,28 @@
   color: var(--mh-text-tertiary);
   font-size: var(--mh-size-caption);
 }
-/* In the money: a neutral lift, never the down red (red means a fall, and half the table is not
-   falling). */
+/* The hairline between each leg's IV and its price, heading included (box shadows, not borders:
+   they take no room, so no column moves). */
+.mh-chain-table :is(td.mh-ce.mh-quiet, th.mh-th-ce.mh-th-iv) {
+  box-shadow: inset -1px 0 0 var(--mh-chain-hairline);
+}
+.mh-chain-table :is(td.mh-pe.mh-quiet, th.mh-th-pe.mh-th-iv) {
+  box-shadow: inset 1px 0 0 var(--mh-chain-hairline);
+}
+/* In the money: a warm grey lift up to (never across) the strike, never the down red (red means a
+   fall, and half the table is not falling); what it means is carried by the amber edge beside the
+   strike. */
 .mh-chain-table td.mh-itm {
-  background: color-mix(in srgb, var(--mh-text-strong) 4%, transparent);
+  background: var(--mh-chain-itm);
 }
 .mh-chain-table tr:hover td.mh-itm {
-  background: color-mix(in srgb, var(--mh-text-strong) 8%, transparent);
+  background: var(--mh-chain-itm-hover);
+}
+.mh-chain-table td.mh-ce.mh-itm:not(.mh-quiet) {
+  box-shadow: inset -1px 0 0 var(--mh-chain-itm-edge);
+}
+.mh-chain-table td.mh-pe.mh-itm:not(.mh-quiet) {
+  box-shadow: inset 1px 0 0 var(--mh-chain-itm-edge);
 }
 /* The spacer standing in for the rows not drawn (ChainPanel's `Gap`): no inset, rule or wash. */
 .mh-chain-table tr.mh-chain-gap td,
@@ -141,17 +174,62 @@
 .mh-chain-table .mh-none {
   color: var(--mh-text-disabled);
 }
+/* The strike on the container's own ground, the row's heaviest figure. */
 .mh-chain-table td.mh-strike {
-  background: var(--mh-surface-1);
-  color: var(--mh-text-secondary);
+  color: var(--mh-text-strong);
+  font-weight: var(--mh-weight-emphasis);
   text-align: center;
 }
-.mh-chain-table tr.mh-atm td.mh-strike {
-  color: var(--mh-text-strong);
-  box-shadow: inset 0 -2px 0 var(--mh-accent);
+/* The money row: lifted, between two hairlines, its strike in the chart's own price-tag chip. Its
+   height stays the rows' 34 px (QuantDesk's was taller; the chain here places rows by a fixed
+   height). */
+.mh-chain-table tr.mh-atm td {
+  background-color: var(--mh-chain-atm);
+  box-shadow:
+    inset 0 1px 0 var(--mh-chain-hairline-strong),
+    inset 0 -1px 0 var(--mh-chain-hairline-strong);
+}
+.mh-chain-table tr.mh-atm:hover td {
+  background-color: color-mix(in srgb, var(--mh-text-strong) 8%, var(--mh-bg));
+}
+.mh-chain-table tr.mh-atm td.mh-ce.mh-quiet {
+  box-shadow:
+    inset -1px 0 0 var(--mh-chain-hairline),
+    inset 0 1px 0 var(--mh-chain-hairline-strong),
+    inset 0 -1px 0 var(--mh-chain-hairline-strong);
+}
+.mh-chain-table tr.mh-atm td.mh-pe.mh-quiet {
+  box-shadow:
+    inset 1px 0 0 var(--mh-chain-hairline),
+    inset 0 1px 0 var(--mh-chain-hairline-strong),
+    inset 0 -1px 0 var(--mh-chain-hairline-strong);
+}
+.mh-chain-table tr.mh-atm td.mh-ce.mh-itm:not(.mh-quiet) {
+  box-shadow:
+    inset -1px 0 0 var(--mh-chain-itm-edge),
+    inset 0 1px 0 var(--mh-chain-hairline-strong),
+    inset 0 -1px 0 var(--mh-chain-hairline-strong);
+}
+.mh-chain-table tr.mh-atm td.mh-pe.mh-itm:not(.mh-quiet) {
+  box-shadow:
+    inset 1px 0 0 var(--mh-chain-itm-edge),
+    inset 0 1px 0 var(--mh-chain-hairline-strong),
+    inset 0 -1px 0 var(--mh-chain-hairline-strong);
+}
+.mh-chain-table tr.mh-atm td.mh-strike > b {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--mh-radius-small);
+  background: var(--qd-chart-tag-bg);
+  color: var(--qd-chart-tag-text);
+  font-weight: inherit;
+}
+.mh-chain-table td.mh-strike > b {
+  font-weight: inherit;
 }
 .mh-chain-table td.mh-straddle {
-  background: var(--mh-surface-1);
   text-align: right;
 }
 .mh-chain-table td.mh-straddle > i {
@@ -166,7 +244,6 @@
   color: var(--mh-text-strong);
 }
 .mh-chain-table td.mh-add {
-  background: var(--mh-surface-1);
   padding: 0 4px;
   text-align: center;
 }

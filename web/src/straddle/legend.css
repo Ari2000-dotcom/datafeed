@@ -1,13 +1,13 @@
 /*
  * The straddle chart's status line (StraddleLegend.tsx), measured off TradingView's own chart and
- * sized to the plot it sits on: 8px in from the plot's left edge and 6px down from its top, the instrument in
- * capitals a step larger than its readings, with a "·" in a 12px slot (10px on slim plots)
- * between its parts; 6px between readings; 2px between rows; words in TradingView's #dbdbdb, figures tabular so a
- * reading does not shift as the crosshair moves. TradingView's 16 / 13 at 24px rows is for its
- * full-screen chart; a desk panel steps down with its width (the container queries below). Each row sits on one plate of the chart's ground, the width of
- * its words and no wider, so no line shows through a letter and no seams show between pieces of
- * a row. A row's buttons are 28 x 24 and show only while the pointer is on the row. Under the
- * rows, a 29 x 21 arrow folds the line rows away, as TradingView's indicator toggler does.
+ * sized to the plot it sits on: 8px in from the plot's left edge and 6px down from its top; its
+ * first row the figures (spot, the synthetic future, VWAP, IV, the legs and the straddle); 2px
+ * between rows; words in TradingView's #dbdbdb, figures tabular so a reading does not shift as the
+ * crosshair moves. 15px at 28px rows on a wide plot, a step down on narrower ones (the container
+ * queries below), never under 13px. Each row sits on one plate of the chart's
+ * ground, the width of its words and no wider, so no line shows through a letter. A row's buttons
+ * are 28 x 24 and show only while the pointer is on the row. Under the rows, a 29 x 21 arrow folds
+ * the added straddles away, as TradingView's indicator toggler does.
  */
 
 .mh-legend-anchor {
@@ -17,10 +17,10 @@
   container-type: inline-size;
 }
 .mh-legend {
-  /* A panel of a wide screen: one step under TradingView's full-screen sizes. */
-  --legend-title: 15px;
-  --legend-text: 13px;
-  --legend-row: 24px;
+  /* A panel of a wide screen: the figures at 15px, read at a glance across the desk. */
+  --legend-title: 16px;
+  --legend-text: 15px;
+  --legend-row: 28px;
   /* Whole pixels: a slot of a fraction of the title's size put every word after it on a half
      pixel, and text on a half pixel renders soft. */
   --legend-dot: 12px;
@@ -63,6 +63,7 @@
   position: relative;
   padding-left: 3px;
 }
+/* The scrip chart's instrument (chart/ScripLegend.tsx): in capitals, a step larger than its readings. */
 .mh-legend-main .mh-legend-title {
   font-size: var(--legend-title);
   letter-spacing: 0.02em;
@@ -86,16 +87,80 @@
   min-height: var(--legend-row);
   padding-left: 4px;
 }
+/* Room between one reading and the next ("O 9,938.00   H 9,940.00"), so a line reads as figures,
+   not as one run of digits. */
 .mh-legend-value {
-  padding-right: 6px;
+  padding-right: 8px;
 }
-/* A label against its number, as TradingView's "O22,964.50"; two letters ("CE") take a hair more. */
+/* A label set off from its number by the space the first row's figures keep ("Fut 9,917.00"):
+   "O 9,938.00", "CE 534.80", never "O9,938.00". */
 .mh-legend-label {
-  padding-right: 2px;
+  padding-right: 4px;
   color: var(--mh-legend-text);
 }
 /* The instrument's readout: every number in the colour of the straddle's move (the readout's
    `mh-up` / `mh-down`), the labels in the legend's ink. */
+
+/* The first row's figures (StraddleLegend `FIGURES`): one line, clipped so the measured fit can
+   tell when it runs over (ui/fitRow.ts) and the least needed give way. Each figure is a quiet
+   button: its label in the legend's ink, its number in its line's colour, its move in green or
+   red; a wash under the pointer, and a click shows or hides its line. */
+.mh-legend-main:has(> .mh-legend-figures) {
+  flex-wrap: nowrap;
+}
+.mh-legend-figures {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 2px;
+}
+.mh-legend-figure {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: var(--legend-row);
+  padding: 0 6px 0 3px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--mh-legend-text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-legend-figure + .mh-legend-figure {
+  margin-left: 2px;
+}
+.mh-legend-figure:hover {
+  background: var(--mh-surface-2);
+}
+.mh-legend-figure:focus-visible {
+  outline: 2px solid var(--mh-focus);
+  outline-offset: -2px;
+}
+.mh-legend-figure .mh-legend-label {
+  padding-right: 4px;
+}
+.mh-legend-number {
+  padding-right: 4px;
+}
+.mh-legend-move {
+  color: var(--mh-legend-text);
+}
+/* A hidden line's figure stays readable, in the quietest ink rather than faded (a faded glyph
+   reads as haze). */
+.mh-legend-figure[data-off] :is(.mh-legend-label, .mh-legend-number, .mh-legend-move) {
+  color: var(--mh-text-disabled);
+}
+.mh-legend-legs,
+.mh-legend-straddle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: var(--legend-row);
+  padding-left: 5px;
+}
 
 /* The market's state, TradingView's 20 x 18 pill: a short bar while closed, a dot while trading. */
 .mh-legend-status {
@@ -213,9 +278,9 @@
    readings a step behind it, and the rows tighten with them. */
 @container (max-width: 1100px) {
   .mh-legend {
-    --legend-title: 14px;
-    --legend-text: 12px;
-    --legend-row: 22px;
+    --legend-title: 15px;
+    --legend-text: 14px;
+    --legend-row: 26px;
   }
 }
 @container (max-width: 640px) {
@@ -226,13 +291,13 @@
 }
 @container (max-width: 420px) {
   .mh-legend {
-    --legend-title: 12px;
-    --legend-text: 11px;
-    --legend-row: 20px;
+    --legend-title: 14px;
+    --legend-text: 13px;
+    --legend-row: 24px;
     --legend-dot: 10px;
   }
-  /* The slimmest plot keeps the name (cut short with an ellipsis if need be) and the ATM strike,
-     drops the interval and the exchange, and its readout runs on a line of its own. */
+  /* The slimmest plot keeps the scrip chart's name (cut short with an ellipsis if need be), drops
+     the interval and the exchange, and its readout runs on a line of its own. */
   .mh-legend-main .mh-legend-titles {
     min-width: 0;
     max-width: 100%;

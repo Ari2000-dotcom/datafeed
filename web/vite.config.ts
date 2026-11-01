@@ -42,6 +42,9 @@ export default defineConfig(({ mode, command }) => {
       sourcemap: false,
     },
     server: {
+      // Node 17+ resolves "localhost" to ::1 only, so http://127.0.0.1:5173 never connected.
+      // Bound to IPv4, both that and http://localhost:5173 open (browsers fall back to it).
+      host: "127.0.0.1",
       port: 5173,
       proxy: {
         // changeOrigin: Caddy on the VPS answers only to its own host name.

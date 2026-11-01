@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import type { DockviewApi } from "dockview";
 
 import { markCurrentWorkspace, removeWorkspace, saveWorkspace, useWorkspaces, type SavedWorkspace } from "../core/workspaces";
-import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon, TrashIcon, WorkspaceIcon } from "../ui/icons";
+import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon, TrashIcon } from "../ui/icons";
+import { deskState } from "./Workspace";
 import "./workspace-menu.css";
 
 /** "Today 4:21 pm", "Yesterday", "3 Nov": when a workspace was kept, short. */
@@ -28,7 +29,9 @@ interface SerializedNode {
  * the menu shows the arrangement the workspace actually has.
  */
 function rectsOf(layout: unknown): Rect[] {
-  const grid = (layout as { grid?: { root?: SerializedNode; orientation?: string } } | null)?.grid;
+  // This version's desk keeps the dock's own under `dock`; the tabbed desk saved it bare.
+  const dock = (layout as { v?: number; dock?: unknown } | null)?.v === 2 ? (layout as { dock?: unknown }).dock : layout;
+  const grid = (dock as { grid?: { root?: SerializedNode; orientation?: string } } | null)?.grid;
   const out: Rect[] = [];
   const walk = (node: SerializedNode | undefined, x: number, y: number, w: number, h: number, horizontal: boolean) => {
     if (!node) return;
@@ -63,19 +66,15 @@ function Arrangement({ layout }: Readonly<{ layout: unknown }>) {
 }
 
 /**
- * The Workspace screen's tab, with its menu of saved workspaces: a search, one row for each (the
- * arrangement it has, its name, how many panels and when it was kept), and under them a field to
- * keep the current layout under a name. A click on a row brings it back.
+ * The top toolbar's Layouts menu, TradingView's saved-layouts button: the layout's name on the
+ * toolbar, and a menu of saved layouts under it, a search, one row for each (the arrangement it
+ * has, its name, how many charts and when it was kept), and a field to keep the current desk under a
+ * name. A click on a row brings it back.
  */
-export function WorkspaceNav({
-  active,
-  onOpen,
+export function LayoutsMenu({
   getApi,
   onLoad,
 }: Readonly<{
-  active: boolean;
-  /** The tab itself: go to the Workspace screen. */
-  onOpen: () => void;
   getApi: () => DockviewApi | null;
   onLoad: (workspace: SavedWorkspace) => void;
 }>) {
@@ -124,7 +123,7 @@ export function WorkspaceNav({
     const clean = as.trim();
     if (!api || !clean) return;
     const replaced = kept.some((w) => w.name.toLowerCase() === clean.toLowerCase());
-    saveWorkspace(clean, api.toJSON(), api.panels.length);
+    saveWorkspace(clean, deskState(api), api.panels.length);
     setName("");
     setStatus(replaced ? `Updated “${clean}”` : `Saved “${clean}”`);
   };
@@ -156,24 +155,15 @@ export function WorkspaceNav({
 
   return (
     <div className="mh-wsnav" ref={root}>
-      <button
-        type="button"
-        className="mh-nav-item mh-nav-icon"
-        aria-current={active ? "page" : undefined}
-        // On the Workspace screen already, the name has nothing else to do: it opens the menu too.
-        onClick={() => (active ? setOpen((v) => !v) : onOpen())}
-      >
-        <WorkspaceIcon size={16} />
-        Workspace
-      </button>
-      <button type="button" className="mh-nav-caret" aria-label="Saved workspaces" aria-expanded={open} aria-haspopup="dialog" title="Saved workspaces" onClick={() => setOpen((v) => !v)}>
-        <ChevronDownIcon size={12} />
+      <button type="button" className="mh-picker mh-layouts-trigger" aria-expanded={open} aria-haspopup="dialog" title="Saved layouts" onClick={() => setOpen((v) => !v)}>
+        <span className="mh-picker-value">{currentName ?? "Unnamed"}</span>
+        <ChevronDownIcon size={13} />
       </button>
       {open ? (
-        <div className="mh-ws" role="dialog" aria-label="Saved workspaces">
+        <div className="mh-ws" role="dialog" aria-label="Saved layouts">
           <div className="mh-ws-search">
             <SearchIcon size={14} />
-            <input ref={search} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder="Search workspaces" aria-label="Search workspaces" spellCheck={false} />
+            <input ref={search} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder="Search layouts" aria-label="Search layouts" spellCheck={false} />
             {query ? (
               <button type="button" aria-label="Clear the search" onClick={() => setQuery("")}>
                 <CloseIcon size={12} />
@@ -183,7 +173,7 @@ export function WorkspaceNav({
 
           {kept.length > 0 ? (
             <>
-              <div className="mh-ws-head">Saved workspaces</div>
+              <div className="mh-ws-head">Saved layouts</div>
               {shown.length > 0 ? (
                 <ul className="mh-ws-list" ref={list}>
                   {shown.map((w) => (
@@ -193,7 +183,7 @@ export function WorkspaceNav({
                         <span className="mh-ws-text">
                           <span className="mh-ws-name">{w.name}</span>
                           <span className="mh-ws-meta">
-                            {w.panels} {w.panels === 1 ? "panel" : "panels"} · {when(w.savedAt)}
+                            {w.panels} {w.panels === 1 ? "chart" : "charts"} · {when(w.savedAt)}
                           </span>
                         </span>
                         {w.id === current ? <CheckIcon size={14} /> : null}
@@ -211,11 +201,11 @@ export function WorkspaceNav({
                   ))}
                 </ul>
               ) : (
-                <div className="mh-ws-empty">No workspace matches “{query}”.</div>
+                <div className="mh-ws-empty">No layout matches “{query}”.</div>
               )}
             </>
           ) : (
-            <div className="mh-ws-empty">No saved workspaces. Save the current layout to open it again later.</div>
+            <div className="mh-ws-empty">No saved layouts. Name the current desk below to open it again later.</div>
           )}
 
           <div className="mh-ws-save">
@@ -225,7 +215,7 @@ export function WorkspaceNav({
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && keep(name)}
                 placeholder="Name the current layout"
-                aria-label="Workspace name"
+                aria-label="Layout name"
                 maxLength={40}
                 spellCheck={false}
               />

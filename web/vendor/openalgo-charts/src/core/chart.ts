@@ -2372,6 +2372,15 @@ export class Chart {
     return this._input._runShortcut(command);
   }
 
+  /**
+   * MarketHub fork: a built-in command run from outside the chart, as its keyboard shortcut would
+   * run it (`zoomIn`, `zoomOut`, `resetScale`, `fitContent`, ...): what a host's own toolbar calls.
+   * False for a command the chart does not know or its navigation options forbid.
+   */
+  public runCommand(command: string): boolean {
+    return this._runShortcut(command);
+  }
+
   /** Stays on the chart by name, for the frame and for tests; the pointer handlers set it. */
   private get _cursor(): { x: number; y: number } | null {
     return this._input._cursor;

@@ -9,10 +9,12 @@ import type { OiProfileData } from "./useOiProfile";
  * one losing it draws as an outline beyond. Reads on the panel's own one-second beat.
  */
 
-/** How far back the reference is, ms. */
-const LOOK_BACK_MS = 2 * 60_000;
+/** How far back the reference is by default, ms; the caller can ask for another (up to KEEP_FOR_MS / 2). */
+export const LOOK_BACK_MS = 2 * 60_000;
 /** A new reading is kept this often, ms. */
 const KEEP_EVERY_MS = 5_000;
+/** Readings are kept this long, so a longer look-back picked later already has its history. */
+const KEEP_FOR_MS = 30 * 60_000;
 /** A move shows once it is this share of the strike's exposure, and goes only when it falls under
  *  the smaller one: a strike hovering at the line does not blink its arrow. */
 const NOISE = 0.0015;
@@ -33,7 +35,7 @@ export interface ExposureRow {
 
 const mag = (v: number | null) => (v === null ? Number.NaN : Math.abs(v));
 
-export function useExposureTrend(rows: readonly ExposureRow[], active: boolean, key: string): OiProfileData | null {
+export function useExposureTrend(rows: readonly ExposureRow[], active: boolean, key: string, lookBackMs = LOOK_BACK_MS): OiProfileData | null {
   const samples = useRef<{ key: string; list: Sample[] }>({ key: "", list: [] });
   const showing = useRef(new Map<string, number>());
   return useMemo(() => {
@@ -53,9 +55,9 @@ export function useExposureTrend(rows: readonly ExposureRow[], active: boolean, 
         call: new Map(rows.map((r, i) => [r.strike, call[i]!])),
         put: new Map(rows.map((r, i) => [r.strike, put[i]!])),
       });
-      while (list.length > 0 && now - list[0]!.at > LOOK_BACK_MS * 2) list.shift();
+      while (list.length > 0 && now - list[0]!.at > KEEP_FOR_MS) list.shift();
     }
-    // A strike's reference: its newest reading at least LOOK_BACK_MS old, or failing that its oldest
+    // A strike's reference: its newest reading at least `lookBackMs` old, or failing that its oldest
     // one (a leg that priced late has no earlier reading than that).
     const reference = (side: "call" | "put", strike: number): number | undefined => {
       let old: number | undefined;
@@ -64,7 +66,7 @@ export function useExposureTrend(rows: readonly ExposureRow[], active: boolean, 
         const v = s[side].get(strike);
         if (v === undefined || !Number.isFinite(v)) continue;
         if (first === undefined) first = v;
-        if (now - s.at >= LOOK_BACK_MS) old = v;
+        if (now - s.at >= lookBackMs) old = v;
       }
       return old ?? first;
     };
@@ -86,5 +88,5 @@ export function useExposureTrend(rows: readonly ExposureRow[], active: boolean, 
       callChange: rows.map((r, i) => move("call", r.strike, call[i]!, reference("call", r.strike))),
       putChange: rows.map((r, i) => move("put", r.strike, put[i]!, reference("put", r.strike))),
     };
-  }, [rows, active, key]);
+  }, [rows, active, key, lookBackMs]);
 }

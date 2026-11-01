@@ -18,6 +18,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* As a cell of the chart grid it fills its container (shell/Workspace.tsx), not a column of its own. */
+.mh-container > .mh-doi {
+  flex: 1 1 auto;
+  height: auto;
+}
+
 /* -- the three figures ----------------------------------------------------------------------- */
 
 .mh-doi-figures {
@@ -210,6 +216,10 @@
   font-size: var(--mh-size-caption);
   white-space: nowrap;
 }
+/* A past session's figures: the day they stand for, in the amber the charts give a past session. */
+.mh-doi-asof {
+  color: var(--mh-amber);
+}
 .mh-doi-dot {
   color: var(--mh-text-disabled);
 }
@@ -254,4 +264,18 @@
   .mh-doi-tiles {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* -- the strip: the underlying, its expiry, the day and the band, one line ----------------------- */
+
+/* In the side panel it keeps its place above the figures; in the toolbar (a cell of the grid) it is
+   the flat strip the toolbar lays out. Either way it never wraps or scrolls: it gives way by pieces. */
+.mh-strip.mh-doi-strip {
+  flex: none;
+  gap: 2px;
+  padding: 0 8px;
+  overflow: hidden;
+}
+.mh-doi-strip .mh-dropdown {
+  flex: none;
 }

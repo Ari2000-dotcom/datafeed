@@ -1,0 +1,83 @@
+/*
+ * The straddle chart's data table (StraddleTable.tsx), TradingView's Pine table pinned in the
+ * price pane's bottom-right corner, where the newest values never run: 8px in from the plot's
+ * right edge and up from its foot (the anchor is the plot inset 8px, StraddleChart keeps it on the
+ * plot as the panel or the pane divider moves, and hides the table where it would cover the
+ * legend). A hairline frame and cell borders, a header row a shade up, words left and figures
+ * right in tabular numerals at the legend's reading size, on the chart's ground at the legend's
+ * opacity so no line shows through a figure. It takes no pointer: the crosshair works underneath.
+ */
+
+.mh-dtable-anchor {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+/* Narrower than the legend and the table side by side: the table gives way, the legend stays. */
+.mh-dtable-anchor[data-collides] {
+  visibility: hidden;
+}
+
+.mh-dtable {
+  --dtable-line: color-mix(in srgb, var(--mh-text-strong) 10%, transparent);
+  border: 1px solid var(--dtable-line);
+  border-collapse: collapse;
+  border-spacing: 0;
+  background: color-mix(in srgb, var(--mh-bg) 85%, transparent);
+  color: var(--mh-legend-text);
+  font-family: var(--mh-font);
+  font-size: var(--mh-size-control);
+  font-variant-numeric: tabular-nums;
+  line-height: normal;
+  white-space: nowrap;
+  /* Windows draws text with its own sharpening only under the default smoothing (as the legend). */
+  -webkit-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
+}
+.mh-dtable :is(th, td) {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--dtable-line);
+  font-weight: var(--mh-weight-regular);
+  text-align: right;
+}
+.mh-dtable thead th {
+  height: 22px;
+  background: color-mix(in srgb, var(--mh-text-strong) 6%, transparent);
+  color: var(--mh-text-tertiary);
+  font-size: var(--mh-size-caption);
+}
+.mh-dtable .mh-dtable-name {
+  text-align: left;
+}
+.mh-dtable tbody .mh-dtable-name {
+  color: var(--mh-text-secondary);
+}
+.mh-dtable thead .mh-dtable-name {
+  color: var(--mh-legend-text);
+}
+/* A call's row is named in green and a put's in red, as the strip's CE and PE badges. */
+.mh-dtable .mh-dtable-name[data-side="call"] {
+  color: var(--mh-up);
+}
+.mh-dtable .mh-dtable-name[data-side="put"] {
+  color: var(--mh-down);
+}
+.mh-dtable td {
+  color: var(--mh-text-strong);
+}
+.mh-dtable td.mh-up {
+  color: var(--mh-up);
+}
+.mh-dtable td.mh-down {
+  color: var(--mh-down);
+}
+.mh-dtable td.mh-dtable-quiet {
+  color: var(--mh-text-secondary);
+}
+.mh-dtable td.mh-dtable-none {
+  color: var(--mh-text-disabled);
+}

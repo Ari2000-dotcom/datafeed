@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import { fmt0, fmt2 } from "../core/format";
+import { dayLabel, fmt0, fmt2, pastWeekdays } from "../core/format";
 import type { Hub } from "../hub/client";
-import { PickStrip, QuickPicks, useFollowedPick } from "../option/PickStrip";
+import { QuickPicks, useFollowedPick } from "../option/PickStrip";
 import type { Pick } from "../straddle/StraddlePage";
 import { Dropdown } from "../ui/Dropdown";
 import { Spinner } from "../ui/icons";
+import { DeltaOiStrip } from "./DeltaOiStrip";
 import { BANDS, DEFAULT_BAND, useDeltaOi, type Band, type DeltaOiRow } from "./useDeltaOi";
+import { DAY_BANDS, DEFAULT_DAY_BAND, useDeltaOiDay, useLastSession, type DayBand } from "./useDeltaOiDay";
 import "./deltaoi.css";
 
 /**
@@ -25,7 +27,15 @@ import "./deltaoi.css";
  *
  * Only a band around the money is live (the hub holds so many live legs per visitor); the foot
  * says how much of the expiry that covers. See `useDeltaOi` for the arithmetic.
+ *
+ * A past session (picked here or on the chart: the panel follows the chart's session) shows that
+ * day's board at its close (`useDeltaOiDay`), and so does Today while the market is shut, on the
+ * last session traded: a weekend, a holiday or before the open never leaves the panel empty. The
+ * foot names the day.
  */
+
+/** Past sessions offered, as on the straddle chart's session picker. */
+const PAST_DAYS = 3;
 
 /** Indian short scale, as a desk reads it: 1.42 Cr, 44.1 L, 8.2 K. The minus is a real minus sign. */
 function compact(v: number): string {
@@ -46,6 +56,7 @@ export function DeltaOiPanel({
 }: Readonly<{ hub: Hub; initialPick?: Pick | null; onPick?: (pick: Pick | null) => void }>) {
   const [pick, setPick] = useFollowedPick(initialPick);
   const [band, setBand] = useState<Band>(DEFAULT_BAND);
+  const [dayBand, setDayBand] = useState<DayBand>(DEFAULT_DAY_BAND);
   /** The feed's OI is in contracts; `shares` multiplies by the lot, the exposure in underlying units. */
   const [unit, setUnit] = useState<"contracts" | "shares">("contracts");
   const [connected, setConnected] = useState(hub.state === "open");
@@ -58,7 +69,18 @@ export function DeltaOiPanel({
   const id = pick?.underlying.id ?? "";
   const expiry = pick?.expiry ?? "";
   const lot = pick?.underlying.lot ?? 1;
-  const doi = useDeltaOi(hub, id, expiry, band);
+
+  // The session: the chart's while it moves (a new pick there brings its day), the panel's own
+  // once picked here. Today while the market is shut stands on the last session traded.
+  const followed = pick?.day ?? "live";
+  const [session, setSession] = useState<string>(followed);
+  useEffect(() => setSession(followed), [followed, id, expiry]);
+  const lastSession = useLastSession(hub, session === "live" ? id : "", expiry);
+  const past = session !== "live" ? session : lastSession;
+  const live = useDeltaOi(hub, past ? "" : id, expiry, band);
+  const day = useDeltaOiDay(hub, past ? id : "", expiry, past ?? "", dayBand);
+  const doi = past ? day : live;
+  const sessions = expiry ? ["live", ...pastWeekdays(PAST_DAYS).filter((d) => d <= expiry)] : ["live"];
 
   const scale = unit === "shares" ? lot : 1;
   const call = doi.callTotal * scale;
@@ -85,6 +107,16 @@ export function DeltaOiPanel({
     <div className="mh-empty">
       <div className="mh-empty-title">Nothing to show</div>
       <div className="mh-empty-text">{doi.error}</div>
+    </div>
+  ) : past && day.needsHub ? (
+    <div className="mh-empty">
+      <div className="mh-empty-title">{dayLabel(past)} needs the hub update</div>
+      <div className="mh-empty-text">This hub reads open interest for the last two sessions only. The hub build that reads any past day's open interest shows this one too.</div>
+    </div>
+  ) : past && doi.noOi ? (
+    <div className="mh-empty">
+      <div className="mh-empty-title">No open interest for {dayLabel(past)} yet</div>
+      <div className="mh-empty-text">The hub's open-interest source answered nothing for that session. The hub build that reads it leg by leg fills it in; an earlier session may already show.</div>
     </div>
   ) : doi.noOi ? (
     <div className="mh-empty">
@@ -147,11 +179,21 @@ export function DeltaOiPanel({
       </div>
 
       <div className="mh-doi-foot">
+        {past ? (
+          <>
+            <span className="mh-doi-asof" title="Open interest at the session's settle, deltas at its last minute">
+              {dayLabel(past)} close
+            </span>
+            <span className="mh-doi-dot">·</span>
+          </>
+        ) : null}
         <span title={`${doi.covered} of the ${doi.inBand} strikes in the band have both legs' price and open interest.`}>
-          {doi.covered} of {doi.inBand} strikes · ±{band} of {doi.strikesTotal}
+          {doi.covered} of {doi.inBand} strikes · {past ? (dayBand === "full" ? "all" : `±${dayBand}`) : `±${band}`} of {doi.strikesTotal}
         </span>
         <span className="mh-doi-dot">·</span>
-        <span>ATM IV {doi.atmIv === null ? "—" : `${doi.atmIv.toFixed(1)}%`}</span>
+        <span title={past ? "A past session's deltas are all taken at this vol: its own leg prices are not kept, so the skew is left out." : undefined}>
+          ATM IV {doi.atmIv === null ? "—" : `${doi.atmIv.toFixed(1)}%`}
+        </span>
         <span className="mh-doi-dot">·</span>
         <span title="Delta is taken on the forward (call − put + strike at the money), not the spot.">Forward {doi.forward === null ? "—" : fmt2(doi.forward)}</span>
         {doi.limited ? (
@@ -177,19 +219,62 @@ export function DeltaOiPanel({
 
   return (
     <div className="mh-doi">
-      <PickStrip hub={hub} pick={pick} onPick={setPick} spot={doi.spot}>
+      <DeltaOiStrip hub={hub} pick={pick} onPick={setPick}>
         {pick ? (
           <Dropdown
+            label="Session"
+            caption={false}
+            value={session}
+            onChange={setSession}
+            align="end"
+            tone={session === "live" ? undefined : "warn"}
+            lead={session === "live" ? <span className={lastSession ? "mh-dot" : "mh-dot mh-ok"} aria-hidden /> : null}
+            renderValue={(o) =>
+              o?.value === "live" ? (
+                <>
+                  Today{lastSession ? <span className="mh-picker-aside" data-drop={1}>closed</span> : null}
+                </>
+              ) : o ? (
+                dayLabel(o.value)
+              ) : null
+            }
+            options={sessions.map((d) => (d === "live" ? { value: d, label: "Today", note: lastSession ? `Closed · ${dayLabel(lastSession)}` : "Live" } : { value: d, label: dayLabel(d) }))}
+          />
+        ) : null}
+        {pick && !past ? (
+          <Dropdown
             label="Band"
+            caption={false}
+            renderValue={(o) => <BandValue label={o?.label} />}
             value={String(band)}
             onChange={(v) => setBand(Number(v) as Band)}
             align="end"
             options={BANDS.map((b) => ({ value: String(b), label: `±${b}`, note: `${b * 2 + 1} strikes` }))}
           />
         ) : null}
-      </PickStrip>
+        {pick && past ? (
+          <Dropdown
+            label="Band"
+            caption={false}
+            renderValue={(o) => <BandValue label={o?.label} />}
+            value={String(dayBand)}
+            onChange={(v) => setDayBand((v === "full" ? "full" : Number(v)) as DayBand)}
+            align="end"
+            options={DAY_BANDS.map((b) => (b === "full" ? { value: "full", label: "Full", note: "whole chain, slower" } : { value: String(b), label: `±${b}`, note: `${b * 2 + 1} strikes` }))}
+          />
+        ) : null}
+      </DeltaOiStrip>
       {body}
     </div>
+  );
+}
+
+/** The band on the strip: its name in the quieter ink (the first thing to give way when the strip runs short), then ±20. */
+function BandValue({ label }: Readonly<{ label: ReactNode }>) {
+  return (
+    <>
+      <span className="mh-picker-aside" data-drop={1}>Band</span> {label}
+    </>
   );
 }
 

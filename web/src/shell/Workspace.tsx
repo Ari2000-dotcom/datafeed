@@ -1,88 +1,63 @@
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type MouseEvent, type PointerEvent, type RefObject } from "react";
-import {
-  DockviewReact,
-  type DockviewApi,
-  type DockviewGroupPanel,
-  type DockviewReadyEvent,
-  type IDockviewHeaderActionsProps,
-  type IDockviewPanelHeaderProps,
-  type IDockviewPanelProps,
-} from "dockview";
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type FunctionComponent } from "react";
+import { DockviewReact, type DockviewApi, type DockviewDidDropEvent, type DockviewReadyEvent, type IDockviewPanel, type IDockviewPanelHeaderProps, type IDockviewPanelProps } from "dockview";
 
 import { dayLabel } from "../core/format";
 import { DeltaOiPanel } from "../greeks/DeltaOiPanel";
 import type { Hub } from "../hub/client";
 import { readPick, StraddlePage, type Pick } from "../straddle/StraddlePage";
-import { DetailsPanel, TablePanel } from "../desk/panels";
-import { ChainPanel } from "../option/ChainPanel";
 import { ScripPage, type ScripPick } from "../chart/ScripPage";
-import { ChartIcon, ChevronDownIcon, CloseIcon, MaximizeIcon, PlusIcon, RestoreIcon, SplitDownIcon, SplitRightIcon, TableIcon } from "../ui/icons";
-import { Popover } from "../ui/Popover";
-import { HeaderSlot, withHeaderSlot } from "./headerSlot";
+import { Crash, CrashNote } from "../ui/Crash";
+import { ARRANGEMENTS, arrangementFor, arrangementOf, type Arrangement, type ArrangementId } from "./arrangements";
+import { AddContainer, ContainerActions, DeskTab } from "./ContainerBar";
+import { installDockBalance } from "./dockBalance";
+import { DOCK_DRAG } from "./dockDrag";
+import { DropMap } from "./DropMap";
+import { setActivePanel, withHeaderSlot } from "./headerSlot";
 
 /**
- * The desk, QuantDesk's way (its `shell/Workspace.tsx`, on the same dockview): containers with a
- * tab strip, any number of straddles, side by side or stacked.
+ * The chart grid, TradingView's way: one to four charts in one of the layouts of the top toolbar's
+ * picker (`arrangements.ts`), on the same dockview the desk has always used, for its splitters and
+ * its saving. Each cell holds one chart and shows no header of its own: the active chart's controls
+ * are in the top toolbar (`headerSlot.tsx`), its values in its own legend. A click on a chart makes
+ * it the active one, framed in the accent blue. A cell can also be Delta × OI: picked from the chart
+ * kinds, or dragged out of the side panel's header onto the grid (`DOCK_DRAG`) and dropped on a
+ * chart's edge to sit beside, above or below it, or on its middle to take its place. Dragging a
+ * cell's tab onto another's edge moves it there. The option chain and the tables live in the side
+ * and bottom panels.
  *
- * - Each tab is one straddle with its own underlying, expiry and session (`StraddlePage`), its
- *   title following the pick ("NIFTY · 27 Oct").
- * - A container's strip holds its tabs; on hover a "+" adds a tab to it, and two buttons at its
- *   right end open a new container to its right or below. A tab dragged to a container's edge
- *   docks there; dropped on a strip it joins that container. The gap between two containers is
- *   the splitter.
- * - The arrangement (and each tab's pick) is saved on this computer as it changes and comes back
- *   on the next visit. `applyPreset` lays out a whole desk at once (the Layout menu).
+ * The grid is saved on this computer as it changes (`mh.desk.v2`) and comes back on the next visit;
+ * a desk saved by the old tabbed layout comes back as its charts, in order, in the layout that fits
+ * their number.
  */
 
-const LAYOUT_KEY = "mh.layout";
-
-/** The three screens of the title bar. Each keeps its own layout on this computer. */
-export type View = "straddle" | "chain" | "workspace";
-export const VIEWS: readonly { id: View; name: string }[] = [
-  { id: "straddle", name: "Straddle" },
-  { id: "chain", name: "Option chain" },
-  { id: "workspace", name: "Workspace" },
-];
-const VIEW_KEY = "mh.view";
-let activeView: View = (() => {
-  try {
-    const v = localStorage.getItem(VIEW_KEY);
-    return VIEWS.some((x) => x.id === v) ? (v as View) : "workspace";
-  } catch {
-    return "workspace";
-  }
-})();
-/** Workspace keeps the key the desk has always saved under, so nobody loses their layout. */
-const viewKey = (v: View) => (v === "workspace" ? LAYOUT_KEY : `${LAYOUT_KEY}.${v}`);
-export const currentView = () => activeView;
+const DESK_KEY = "mh.desk.v2";
+/** Where the tabbed desk kept its screens' layouts, read once to bring their charts over. */
+const LEGACY_VIEW_KEY = "mh.view";
+const legacyKey = (view: string | null) => (view && view !== "workspace" ? `mh.layout.${view}` : "mh.layout");
 /** Coalesced: a splitter drag changes the layout every frame. */
 const SAVE_DELAY_MS = 400;
 
+export type ChartKind = "straddle" | "scrip" | "deltaoi";
+export const isChartKind = (c: unknown): c is ChartKind => c === "straddle" || c === "scrip" || c === "deltaoi";
+
+export interface ChartSpec {
+  component: ChartKind;
+  params: Record<string, unknown>;
+  title?: string;
+}
+
+/** The desk as saved, here and in a saved workspace. */
+export interface DeskState {
+  v: 2;
+  arrangement: ArrangementId;
+  dock: unknown;
+}
+const isDesk = (x: unknown): x is DeskState => typeof x === "object" && x !== null && (x as { v?: unknown }).v === 2;
+
 interface StraddleParams {
   pick?: Pick | null;
-  /** A preset's underlying, picked once the hub is there. */
+  /** An underlying picked by name once the hub is there. */
   autoPick?: string;
-}
-
-const Desk = createContext<{ hub: Hub; themeKey: string } | null>(null);
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** A tab's title: the underlying and its expiry, and the day when it is a past session. */
-function titleOf(pick: Pick | null | undefined, autoPick?: string): string {
-  if (!pick) return autoPick ?? "New straddle";
-  const [, m, d] = pick.expiry.split("-").map(Number);
-  const expiry = `${d} ${MONTHS[(m ?? 1) - 1]}`;
-  return pick.day === "live" ? `${pick.underlying.name} · ${expiry}` : `${pick.underlying.name} · ${expiry} · ${dayLabel(pick.day)}`;
-}
-
-// One sequence for every "+" and preset, so two panels made in one millisecond cannot collide.
-let counter = 0;
-export type PanelKind = "straddle" | "chain" | "deltaoi" | "table" | "details" | "scrip";
-const nextId = (kind: PanelKind = "straddle") => `${kind}-${++counter}-${Date.now()}`;
-
-interface ChainParams {
-  pick?: Pick | null;
 }
 
 interface ScripParams {
@@ -90,7 +65,53 @@ interface ScripParams {
   interval?: string;
 }
 
-/* -- a tab's content: one straddle ------------------------------------------------------------- */
+interface DeltaOiParams {
+  pick?: Pick | null;
+}
+
+const Desk = createContext<{ hub: Hub; themeKey: string } | null>(null);
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** A straddle chart's title: the underlying and its expiry, and the day when it is a past session. */
+function titleOf(pick: Pick | null | undefined, autoPick?: string): string {
+  if (!pick) return autoPick ?? "New straddle";
+  const [, m, d] = pick.expiry.split("-").map(Number);
+  const expiry = `${d} ${MONTHS[(m ?? 1) - 1]}`;
+  return pick.day === "live" ? `${pick.underlying.name} · ${expiry}` : `${pick.underlying.name} · ${expiry} · ${dayLabel(pick.day)}`;
+}
+
+/** A Delta × OI cell's title: the underlying and its expiry, and the day when it is a past session. */
+function deltaTitle(pick: Pick | null | undefined): string {
+  if (!pick) return "Δ × OI";
+  const [, m, d] = pick.expiry.split("-").map(Number);
+  const expiry = `${d} ${MONTHS[(m ?? 1) - 1]}`;
+  return pick.day === "live" ? `Δ × OI · ${pick.underlying.name} · ${expiry}` : `Δ × OI · ${pick.underlying.name} · ${expiry} · ${dayLabel(pick.day)}`;
+}
+
+// One sequence for every chart made, so two made in one millisecond cannot collide.
+let counter = 0;
+const nextId = (kind: ChartKind) => `${kind}-${++counter}-${Date.now()}`;
+
+/* -- the layout in use, for the picker ---------------------------------------------------------- */
+
+let arrangement: ArrangementId = "1";
+const arrangementListeners = new Set<() => void>();
+function setArrangement(id: ArrangementId) {
+  if (arrangement === id) return;
+  arrangement = id;
+  for (const fn of arrangementListeners) fn();
+}
+export const useArrangement = (): ArrangementId =>
+  useSyncExternalStore(
+    (fn) => {
+      arrangementListeners.add(fn);
+      return () => arrangementListeners.delete(fn);
+    },
+    () => arrangement,
+  );
+
+/* -- a cell's content: one chart ---------------------------------------------------------------- */
 
 function StraddlePanel({ api, params }: IDockviewPanelProps<StraddleParams>) {
   const desk = useContext(Desk);
@@ -116,46 +137,6 @@ function StraddlePanel({ api, params }: IDockviewPanelProps<StraddleParams>) {
   );
 }
 
-function ChainDockPanel({ api, params }: IDockviewPanelProps<ChainParams>) {
-  const desk = useContext(Desk);
-  if (!desk) return null;
-  return (
-    <ChainPanel
-      hub={desk.hub}
-      initialPick={params.pick}
-      onPick={(pick) => {
-        const title = pick ? `Chain · ${pick.underlying.name}` : "Option chain";
-        if (api.title !== title) api.setTitle(title);
-        api.updateParameters({ pick });
-      }}
-    />
-  );
-}
-
-function DeltaOiDockPanel({ api, params }: IDockviewPanelProps<ChainParams>) {
-  const desk = useContext(Desk);
-  if (!desk) return null;
-  return (
-    <DeltaOiPanel
-      hub={desk.hub}
-      initialPick={params.pick}
-      onPick={(pick) => {
-        const title = pick ? `Δ×OI · ${pick.underlying.name}` : "Delta × OI";
-        if (api.title !== title) api.setTitle(title);
-        api.updateParameters({ pick });
-      }}
-    />
-  );
-}
-
-function TableDockPanel() {
-  return <TablePanel />;
-}
-function DetailsDockPanel() {
-  const desk = useContext(Desk);
-  return desk ? <DetailsPanel hub={desk.hub} /> : null;
-}
-
 function ScripDockPanel({ api, params }: IDockviewPanelProps<ScripParams>) {
   const desk = useContext(Desk);
   if (!desk) return null;
@@ -174,230 +155,367 @@ function ScripDockPanel({ api, params }: IDockviewPanelProps<ScripParams>) {
   );
 }
 
-// Each panel can lift its strip into its container's header when it is the container's only one.
-const COMPONENTS = {
-  straddle: withHeaderSlot(StraddlePanel),
-  chain: withHeaderSlot(ChainDockPanel),
-  table: withHeaderSlot(TableDockPanel),
-  details: withHeaderSlot(DetailsDockPanel),
-  deltaoi: withHeaderSlot(DeltaOiDockPanel),
-  scrip: withHeaderSlot(ScripDockPanel),
-};
-
-/* -- a tab: icon, title, a close button that shows on hover ----------------------------------- */
-
-function DeskTab({ api, containerApi }: IDockviewPanelHeaderProps) {
-  const [title, setTitle] = useState(api.title ?? "");
-  useEffect(() => {
-    setTitle(api.title ?? "");
-    const subscription = api.onDidTitleChange((e) => setTitle(e.title));
-    return () => subscription.dispose();
-  }, [api]);
-  // A middle click closes, as in a browser.
-  const middle = useRef(false);
-  const close = (e: MouseEvent | PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    api.close();
-  };
+/** Delta × OI as a cell of the grid: the same panel the side rail opens, set where a chart would be. */
+function DeltaOiDockPanel({ api, params }: IDockviewPanelProps<DeltaOiParams>) {
+  const desk = useContext(Desk);
+  if (!desk) return null;
   return (
-    <div
-      className="mh-tab"
-      title={title}
-      onPointerDown={(e) => {
-        middle.current = e.button === 1;
-      }}
-      onPointerUp={(e) => {
-        if (middle.current && e.button === 1) close(e);
-        middle.current = false;
-      }}
-    >
-      <span className="mh-tab-icon" aria-hidden>
-        {api.id.startsWith("straddle") || api.id.startsWith("scrip") ? <ChartIcon size={13} /> : <TableIcon size={13} />}
-      </span>
-      <span className="mh-tab-title">{title}</span>
-      <TypeCaret panelId={api.id} containerApi={containerApi} onReplaced={() => api.close()} />
-      <button
-        type="button"
-        className="mh-tab-close"
-        aria-label={`Close ${title}`}
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onClick={close}
-      >
-        <CloseIcon size={11} />
-      </button>
+    <div className="mh-page">
+      <section className="mh-container" aria-label="Delta × OI">
+        <DeltaOiPanel
+          hub={desk.hub}
+          initialPick={params.pick ?? null}
+          onPick={(pick) => {
+            const title = deltaTitle(pick);
+            if (api.title !== title) api.setTitle(title);
+            api.updateParameters({ pick });
+          }}
+        />
+      </section>
     </div>
   );
 }
 
 /**
- * The panel kinds as a menu under `anchor`: what a tab's caret and a strip's "+" open. It floats
- * over the page (`Popover`), so a short container never clips it. The keys work as in every other
- * menu: ↑/↓, Home/End move, Enter picks, Escape or Tab closes (Escape back to the button), and so
- * does a click outside.
+ * A chart that fails to draw says so in its own cell, and the rest of the desk carries on. What it
+ * was showing comes back with the layout on every visit, so it may be what broke it; starting over
+ * drops that and opens the chart empty.
  */
-function KindMenu({ anchor, onPick, onClose }: Readonly<{ anchor: RefObject<HTMLButtonElement>; onPick: (kind: PanelKind) => void; onClose: () => void }>) {
-  const box = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLUListElement>(null);
-  const [active, setActive] = useState(0);
-  const id = useId();
-  useEffect(() => {
-    list.current?.focus({ preventScroll: true });
-    const away = (e: globalThis.PointerEvent) => {
-      const target = e.target as Node;
-      if (!box.current?.contains(target) && !anchor.current?.contains(target)) onClose();
-    };
-    document.addEventListener("pointerdown", away);
-    return () => document.removeEventListener("pointerdown", away);
-  }, [anchor, onClose]);
-  const last = PANEL_KINDS.length - 1;
-  const onKey = (e: React.KeyboardEvent) => {
-    const moves: Record<string, () => void> = {
-      ArrowDown: () => setActive((i) => Math.min(last, i + 1)),
-      ArrowUp: () => setActive((i) => Math.max(0, i - 1)),
-      Home: () => setActive(0),
-      End: () => setActive(last),
-      Enter: () => onPick(PANEL_KINDS[active]!.kind),
-      " ": () => onPick(PANEL_KINDS[active]!.kind),
-      Escape: () => {
-        onClose();
-        anchor.current?.focus();
-      },
-      Tab: onClose,
-    };
-    const move = moves[e.key];
-    if (!move) return;
-    if (e.key !== "Tab") e.preventDefault();
-    // A tab's own keys (dockview's) never see what the menu used.
-    e.stopPropagation();
-    move();
-  };
-  return (
-    <Popover anchor={anchor} boxRef={box}>
-      {/* Its events still bubble through React to the tab it opened from: kept from starting a drag there. */}
-      <ul
-        ref={list}
-        className="mh-menu-list"
-        role="menu"
-        tabIndex={-1}
-        aria-activedescendant={`${id}-${active}`}
-        onKeyDown={onKey}
-        onPointerDown={(e) => e.stopPropagation()}
+function guarded<T extends object>(Panel: FunctionComponent<IDockviewPanelProps<T>>): FunctionComponent<IDockviewPanelProps<T>> {
+  function Guarded(props: IDockviewPanelProps<T>) {
+    const { api, params } = props;
+    return (
+      <Crash
+        fallback={(error, retry) => (
+          <CrashNote title="This chart stopped" error={error}>
+            <button
+              type="button"
+              className="mh-btn"
+              onClick={() => {
+                api.updateParameters(Object.fromEntries(Object.keys(params ?? {}).map((key) => [key, undefined])));
+                retry();
+              }}
+            >
+              Start this chart over
+            </button>
+          </CrashNote>
+        )}
       >
-        {PANEL_KINDS.map((k, i) => (
-          <li
-            key={k.kind}
-            id={`${id}-${i}`}
-            role="menuitem"
-            className={i === active ? "mh-menu-item mh-active" : "mh-menu-item"}
-            onPointerEnter={() => setActive(i)}
-            onClick={() => onPick(k.kind)}
-          >
-            <span className="mh-menu-icon">
-              <PanelIcon kind={k.kind} />
-            </span>
-            <span className="mh-menu-text">{k.name}</span>
-            <span className="mh-menu-note">{k.note}</span>
-          </li>
-        ))}
-      </ul>
-    </Popover>
-  );
+        <Panel {...props} />
+      </Crash>
+    );
+  }
+  return Guarded;
 }
 
-/** The caret on a tab: what the container shows. Picking another kind opens it in place and closes this one. */
-function TypeCaret({ panelId, containerApi, onReplaced }: Readonly<{ panelId: string; containerApi: DockviewApi; onReplaced: () => void }>) {
-  const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  return (
-    <>
-      <button
-        ref={button}
-        type="button"
-        className="mh-tab-caret"
-        aria-label="Change what this container shows"
-        title="Change what this container shows"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
-      >
-        <ChevronDownIcon size={11} />
-      </button>
-      {open ? (
-        <KindMenu
-          anchor={button}
-          onClose={close}
-          onPick={(kind) => {
-            setOpen(false);
-            addPanelOf(containerApi, kind, { referencePanel: panelId });
-            onReplaced();
-          }}
-        />
-      ) : null}
-    </>
-  );
-}
+const COMPONENTS = {
+  straddle: guarded(withHeaderSlot(StraddlePanel)),
+  scrip: guarded(withHeaderSlot(ScripDockPanel)),
+  deltaoi: guarded(withHeaderSlot(DeltaOiDockPanel)),
+};
 
-/* -- a container's strip: "+" after its tabs, split buttons at its end ------------------------ */
+/** The chart kinds, as the toolbar's chart picker names them. */
+export const CHART_KINDS: readonly { kind: ChartKind; name: string; note: string }[] = [
+  { kind: "straddle", name: "Straddle", note: "ATM straddle, VWAP, IV" },
+  { kind: "scrip", name: "Scrip chart", note: "Candles, OI profile" },
+  { kind: "deltaoi", name: "Delta × OI", note: "Call and put exposure per strike" },
+];
 
-const stop = (e: PointerEvent) => e.stopPropagation();
+/* -- building the grid -------------------------------------------------------------------------- */
 
 type Position = Parameters<DockviewApi["addPanel"]>[0]["position"];
 
-/** A new panel of `kind`: a straddle chart (empty, to be picked) or an option chain (on the last pick). */
-export function addPanelOf(api: DockviewApi, kind: PanelKind, position: Position) {
-  const panel =
-    kind === "chain"
-      ? api.addPanel({ id: nextId("chain"), component: "chain", title: "Option chain", params: { pick: readPick() } satisfies ChainParams, position })
-      : kind === "deltaoi"
-        ? api.addPanel({ id: nextId("deltaoi"), component: "deltaoi", title: "Delta × OI", params: { pick: readPick() } satisfies ChainParams, position })
-        : kind === "table"
-          ? api.addPanel({ id: nextId("table"), component: "table", title: "All straddles", position })
-          : kind === "details"
-            ? api.addPanel({ id: nextId("details"), component: "details", title: "ATM straddle", position })
-            : kind === "scrip"
-              ? api.addPanel({ id: nextId("scrip"), component: "scrip", title: "Chart", params: {} satisfies ScripParams, position })
-            : api.addPanel({ id: nextId(), component: "straddle", title: "New straddle", params: { pick: null } satisfies StraddleParams, position });
-  panel.api.setActive();
+function addChart(api: DockviewApi, spec: ChartSpec, position?: Position): IDockviewPanel {
+  const title =
+    spec.title ??
+    (spec.component === "straddle"
+      ? titleOf((spec.params as StraddleParams).pick, (spec.params as StraddleParams).autoPick)
+      : spec.component === "deltaoi"
+        ? deltaTitle((spec.params as DeltaOiParams).pick)
+        : "Chart");
+  const panel = api.addPanel({ id: nextId(spec.component), component: spec.component, title, params: spec.params, position });
   return panel;
 }
-const addStraddle = (api: DockviewApi, position: Position) => addPanelOf(api, "straddle", position);
 
-/**
- * The room a container keeps when the desk is split in two: the chart takes 60%, the other stuff
- * the rest. A split from a container's header, a layout from the Layout menu, and a double click
- * on a divider all land here.
- */
-const KEEP = 0.6;
+/** The charts in reading order: row by row from the top, left to right in a row. */
+export function chartsInOrder(api: DockviewApi): IDockviewPanel[] {
+  const cells = api.groups.map((g) => ({ g, r: g.element.getBoundingClientRect() }));
+  cells.sort((a, b) => (Math.abs(a.r.top - b.r.top) > 4 ? a.r.top - b.r.top : a.r.left - b.r.left));
+  return cells.flatMap(({ g }) => (g.activePanel ? [g.activePanel] : []));
+}
 
-/** A container split in two: the new one takes the share the first one does not keep. */
-function split(api: DockviewApi, group: DockviewGroupPanel, direction: "right" | "below") {
-  const room = direction === "right" ? group.api.width : group.api.height;
-  const panel = addStraddle(api, { referenceGroup: group, direction });
-  panel.api.setSize(direction === "right" ? { width: Math.round(room * (1 - KEEP)) } : { height: Math.round(room * (1 - KEEP)) });
+const specOf = (panel: IDockviewPanel): ChartSpec => ({
+  component: isChartKind(panel.api.component) ? panel.api.component : "straddle",
+  params: JSON.parse(JSON.stringify(panel.params ?? {})) as Record<string, unknown>,
+  title: panel.title,
+});
+
+/** A new cell's chart: the same as the one it copies (TradingView opens new cells on the active symbol). */
+const copyOf = (spec: ChartSpec): ChartSpec => ({ ...spec, params: JSON.parse(JSON.stringify(spec.params)) as Record<string, unknown> });
+
+/** Cells being laid out in bulk (a layout built or loaded): the picker is told what they are, not worked out from them. */
+let quiet = 0;
+
+/** A whole layout is about to change: leave a container that fills the desk, and hold the layout sync until it settles. */
+function hush(api: DockviewApi) {
+  if (api.hasMaximizedGroup()) api.exitMaximizedGroup();
+  quiet++;
+  // A timer, not a frame: a tab in the background runs no frames, and the sync would wait on it.
+  window.setTimeout(() => quiet--, 400);
+}
+
+/** The picker told what is on screen, once dockview has settled; never while a layout is being laid out. */
+function syncSoon(api: DockviewApi) {
+  window.setTimeout(() => quiet === 0 && syncArrangement(api), 120);
+}
+
+/** Lays out `specs` as `target`, the `active`-th one in front. */
+function build(api: DockviewApi, target: Arrangement, specs: readonly ChartSpec[], active: number) {
+  setArrangement(target.id);
+  hush(api);
+  api.clear();
+  const p: IDockviewPanel[] = [];
+  const at = (i: number, ref?: number, direction?: "right" | "below") => {
+    p[i] = addChart(api, specs[i]!, ref === undefined ? undefined : { referencePanel: p[ref]!, direction: direction! });
+  };
+  // Each cell after the first opens beside or under one already there; every split even, as
+  // TradingView lays them.
+  const PLAN: Record<ArrangementId, readonly (readonly [ref: number, direction: "right" | "below"])[]> = {
+    "1": [],
+    "2v": [[0, "right"]],
+    "2h": [[0, "below"]],
+    "3v": [[0, "right"], [1, "right"]],
+    "1l2r": [[0, "right"], [1, "below"]],
+    "1t2b": [[0, "below"], [1, "right"]],
+    "2x2": [[0, "right"], [0, "below"], [1, "below"]],
+    "1l3r": [[0, "right"], [1, "below"], [2, "below"]],
+  };
+  at(0);
+  PLAN[target.id].forEach(([ref, direction], i) => at(i + 1, ref, direction));
+
+  const w = (n: number) => Math.round(api.width / n);
+  const h = (n: number) => Math.round(api.height / n);
+  const SIZES: Record<ArrangementId, readonly { width?: number; height?: number }[]> = {
+    "1": [],
+    "2v": [{ width: w(2) }],
+    "2h": [{ height: h(2) }],
+    "3v": [{ width: w(3) }, { width: w(3) }],
+    "1l2r": [{ width: w(2) }, { height: h(2) }],
+    "1t2b": [{ height: h(2) }, { width: w(2) }],
+    "2x2": [{ width: w(2), height: h(2) }, { height: h(2) }],
+    "1l3r": [{ width: w(2) }, { height: h(3) }, { height: h(3) }],
+  };
+  SIZES[target.id].forEach((size, i) => p[i]?.api.setSize(size));
+  p[Math.min(active, p.length - 1)]?.api.setActive();
 }
 
 /**
- * A double click on a divider puts the two sides it separates back to their default: the first
- * (left or upper) one keeps KEEP of the room the two share, the other gets the rest.
+ * The grid as one of the ARRANGEMENTS. The charts on it keep their places in reading order; a cell
+ * more than there are charts opens on a copy of the active one, and charts past the layout's last
+ * cell go.
  */
+export function applyArrangement(api: DockviewApi, id: ArrangementId) {
+  const target = arrangementOf(id);
+  const current = chartsInOrder(api);
+  const active = Math.max(0, current.findIndex((p) => p.api.isActive));
+  const specs = current.map(specOf);
+  const model = specs[active] ?? specs[0] ?? { component: "straddle", params: { pick: readPick() } };
+  while (specs.length < target.count) specs.push(copyOf(model));
+  build(api, target, specs.slice(0, target.count), Math.min(active, target.count - 1));
+}
+
+/** The active chart turned into another kind, in its own cell. */
+export function replaceChart(api: DockviewApi, panelId: string, kind: ChartKind) {
+  const old = api.getPanel(panelId);
+  if (!old || old.api.component === kind) return;
+  const pick = (old.params as StraddleParams | undefined)?.pick ?? readPick();
+  // A scrip chart opens on the straddle's underlying, Delta × OI on its pick; a straddle on the last pick made.
+  const params: Record<string, unknown> = kind === "scrip" ? { id: pick?.underlying.id } : kind === "deltaoi" ? { pick } : { pick: readPick() };
+  const title = kind === "scrip" ? "Chart" : kind === "deltaoi" ? deltaTitle(pick) : titleOf(readPick());
+  const panel = api.addPanel({ id: nextId(kind), component: kind, title, params, position: { referencePanel: old } });
+  old.api.close();
+  panel.api.setActive();
+}
+
+/**
+ * `count` containers where this one stands: it and `count - 1` copies of it, in a row (`right`) or
+ * a column (`below`), each added off the last so three rows divide this container's own footprint
+ * into three. QuantDesk's "Split this container". False when the desk has no room for them.
+ */
+export function splitCell(api: DockviewApi, panelId: string, count: number, direction: "below" | "right"): boolean {
+  const panel = api.getPanel(panelId);
+  if (!panel || count < 2 || api.groups.length + count - 1 > MOST_CELLS) return false;
+  const spec = specOf(panel);
+  let last = panel;
+  for (let i = 1; i < count; i++) last = addChart(api, copyOf(spec), { referencePanel: last, direction });
+  return true;
+}
+
+/* -- Delta × OI dragged in from the side panel -------------------------------------------------- */
+
+const DIRECTION = { top: "above", bottom: "below", left: "left", right: "right" } as const;
+
+/** The most cells a layout of the picker has. */
+export const MOST_CELLS = 4;
+
+/**
+ * The picker's layout nearest the cells as they stand: found by their rectangles, so a cell moved
+ * by hand or docked from the side leaves the picker naming what is on screen.
+ */
+export function syncArrangement(api: DockviewApi) {
+  const cells = api.groups.map((g) => g.element.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+  if (cells.length === 0) return;
+  const left = Math.min(...cells.map((r) => r.left));
+  const top = Math.min(...cells.map((r) => r.top));
+  const width = Math.max(...cells.map((r) => r.right)) - left;
+  const height = Math.max(...cells.map((r) => r.bottom)) - top;
+  if (width <= 0 || height <= 0) return;
+  const rects = cells
+    .map((r) => [(r.left - left) / width, (r.top - top) / height, r.width / width, r.height / height] as const)
+    .sort((a, b) => (Math.abs(a[1] - b[1]) > 0.05 ? a[1] - b[1] : a[0] - b[0]));
+  let best: Arrangement | null = null;
+  let bestGap = Infinity;
+  for (const candidate of ARRANGEMENTS.filter((a) => a.count === rects.length)) {
+    const gap = candidate.rects.reduce((sum, c, i) => sum + c.reduce((s, v, k) => s + Math.abs(v - rects[i]![k]!), 0), 0);
+    if (gap < bestGap) {
+      best = candidate;
+      bestGap = gap;
+    }
+  }
+  if (best) setArrangement(best.id);
+}
+
+/** Whether a cell dropped from the side panel has room: a fifth one has none, but a chart's middle still takes it. */
+export const canDock = (api: DockviewApi, position: string) => position === "center" || api.groups.length < MOST_CELLS;
+
+type Cell = DockviewApi["groups"][number];
+
+/**
+ * A new cell of `kind` beside, above or below `cell` (or the whole grid's edge when none is named);
+ * on a cell's middle it takes that cell's chart's place. False when there was no room or nothing
+ * to take the place of.
+ */
+export function dockKind(api: DockviewApi, kind: ChartKind, position: keyof typeof DIRECTION | "center", cell?: Cell): boolean {
+  if (position === "center") {
+    const target = cell?.activePanel;
+    if (!target) return false;
+    replaceChart(api, target.id, kind);
+  } else {
+    if (!canDock(api, position)) return false;
+    const pick = readPick();
+    const panel = api.addPanel({
+      id: nextId(kind),
+      component: kind,
+      title: kind === "deltaoi" ? deltaTitle(pick) : kind === "straddle" ? titleOf(pick) : "Chart",
+      params: kind === "scrip" ? { id: pick?.underlying.id } : { pick },
+      position: cell ? { referenceGroup: cell, direction: DIRECTION[position] } : { direction: DIRECTION[position] },
+    });
+    panel.api.setActive();
+  }
+  // Settled before it is measured.
+  syncSoon(api);
+  return true;
+}
+
+/** A kind of cell dropped on the grid from the side panel (what its header's drag carries). */
+export function dockDropped(api: DockviewApi, event: DockviewDidDropEvent): boolean {
+  const kind = event.nativeEvent.dataTransfer?.getData(DOCK_DRAG);
+  return isChartKind(kind) && dockKind(api, kind, event.position, event.group);
+}
+
+/* -- saving and restoring ----------------------------------------------------------------------- */
+
+export const deskState = (api: DockviewApi): DeskState => ({ v: 2, arrangement, dock: api.toJSON() });
+
+/** Every cell one chart of a kind the grid draws: a desk this version saved. */
+const valid = (api: DockviewApi) =>
+  api.panels.length > 0 && api.groups.length <= 4 && api.groups.every((g) => g.panels.length === 1) && api.panels.every((p) => isChartKind(p.api.component));
+
+interface SerialNode {
+  type?: string;
+  data?: unknown;
+}
+
+/** The charts of a desk the old tabbed layout saved, container by container in reading order. */
+function legacySpecs(layout: unknown): ChartSpec[] {
+  const json = layout as { grid?: { root?: SerialNode }; panels?: Record<string, { contentComponent?: string; params?: Record<string, unknown>; title?: string }> } | null;
+  const panels = json?.panels ?? {};
+  const out: ChartSpec[] = [];
+  const walk = (node: SerialNode | undefined) => {
+    if (!node) return;
+    if (node.type === "branch" && Array.isArray(node.data)) {
+      for (const kid of node.data as SerialNode[]) walk(kid);
+      return;
+    }
+    const views = (node.data as { views?: string[]; activeView?: string } | undefined)?.views ?? [];
+    for (const id of views) {
+      const p = panels[id];
+      if (p && isChartKind(p.contentComponent)) out.push({ component: p.contentComponent, params: p.params ?? {}, title: p.title });
+    }
+  };
+  walk(json?.grid?.root);
+  return out;
+}
+
+/** Brings back a saved desk, this version's or the old tabbed one's; false when there is nothing to draw. */
+export function loadDesk(api: DockviewApi, saved: unknown): boolean {
+  hush(api);
+  if (isDesk(saved)) {
+    try {
+      api.fromJSON(saved.dock as Parameters<DockviewApi["fromJSON"]>[0]);
+    } catch {
+      api.clear();
+    }
+    if (valid(api)) {
+      // Opens on the whole desk, not on whichever container filled it when it was saved.
+      if (api.hasMaximizedGroup()) api.exitMaximizedGroup();
+      // A desk saved before panels carried a title strip kept `hideHeader` on every group: shown
+      // again here, not just on the next save, so a visit right after the update sees it too.
+      for (const g of api.groups) g.header.hidden = false;
+      setArrangement(arrangementOf(saved.arrangement).id);
+      // A desk saved before the picker followed the cells may name another layout than it draws.
+      window.setTimeout(() => syncArrangement(api), 500);
+      return true;
+    }
+  }
+  const specs = legacySpecs(isDesk(saved) ? saved.dock : saved);
+  if (specs.length === 0) return false;
+  const target = arrangementFor(specs.length);
+  build(api, target, specs.slice(0, target.count), 0);
+  return true;
+}
+
+function readSaved(): unknown {
+  try {
+    const desk = localStorage.getItem(DESK_KEY);
+    if (desk) return JSON.parse(desk);
+    const legacy = localStorage.getItem(legacyKey(localStorage.getItem(LEGACY_VIEW_KEY)));
+    return legacy ? JSON.parse(legacy) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The way out of a page that will not draw: the desk dropped, so it opens on one empty chart. Saved workspaces stay. */
+export function forgetLayouts() {
+  try {
+    localStorage.removeItem(DESK_KEY);
+    for (const key of ["mh.layout", "mh.layout.straddle", "mh.layout.chain", LEGACY_VIEW_KEY]) localStorage.removeItem(key);
+  } catch {
+    // Storage off: nothing was saved to come back.
+  }
+}
+
+/** One straddle chart on the last pick: a first visit, or a desk that will not come back. */
+const opening = (api: DockviewApi) => build(api, arrangementOf("1"), [{ component: "straddle", params: { pick: readPick() } }], 0);
+
+/** A double click on a divider evens the two sides it separates. */
 function resetDivider(api: DockviewApi, sash: Element) {
   const s = sash.getBoundingClientRect();
   const vertical = s.height > s.width;
   const near = (a: number, b: number) => Math.abs(a - b) <= 10;
-  let first: DockviewGroupPanel | undefined;
-  let second: DockviewGroupPanel | undefined;
+  let first: (typeof api.groups)[number] | undefined;
+  let second: (typeof api.groups)[number] | undefined;
   for (const g of api.groups) {
     const r = g.element.getBoundingClientRect();
     if (vertical) {
@@ -411,227 +529,27 @@ function resetDivider(api: DockviewApi, sash: Element) {
     }
   }
   if (!first || !second) return;
-  if (vertical) first.api.setSize({ width: Math.round((first.api.width + second.api.width) * KEEP) });
-  else first.api.setSize({ height: Math.round((first.api.height + second.api.height) * KEEP) });
+  if (vertical) first.api.setSize({ width: Math.round((first.api.width + second.api.width) / 2) });
+  else first.api.setSize({ height: Math.round((first.api.height + second.api.height) / 2) });
 }
 
-/** What a "+" or a split can open, in the order the menus list them. */
-export const PANEL_KINDS: readonly { kind: PanelKind; name: string; note: string }[] = [
-  { kind: "straddle", name: "Straddle chart", note: "Compare up to 5" },
-  { kind: "chain", name: "Option chain", note: "Add strikes" },
-  { kind: "scrip", name: "Scrip chart", note: "Candles + ATR" },
-  { kind: "deltaoi", name: "Delta × OI", note: "Call and put exposure" },
-  { kind: "table", name: "All straddles", note: "A row per chart" },
-  { kind: "details", name: "ATM straddle", note: "Legs, VWAP, IV" },
-];
-
-/** A panel kind's mark in the menus: a chart's line or a table's grid, as its tab shows. */
-export function PanelIcon({ kind }: Readonly<{ kind: PanelKind }>) {
-  return kind === "straddle" || kind === "scrip" ? <ChartIcon size={13} /> : <TableIcon size={13} />;
-}
-
-function HeaderAdd({ containerApi, group }: IDockviewHeaderActionsProps) {
-  const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  return (
-    <div className="mh-header-add" data-open={open || undefined}>
-      <button
-        ref={button}
-        type="button"
-        className="mh-dock-btn"
-        aria-label="New tab in this container"
-        title="New tab in this container"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onPointerDown={stop}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <PlusIcon size={14} />
-      </button>
-      {open ? (
-        <KindMenu
-          anchor={button}
-          onClose={close}
-          onPick={(kind) => {
-            setOpen(false);
-            addPanelOf(containerApi, kind, { referenceGroup: group });
-          }}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function HeaderSplit({ containerApi, group }: IDockviewHeaderActionsProps) {
-  // Maximizing gives one container the whole desk until restored.
-  const [maximized, setMaximized] = useState(group.api.isMaximized());
-  useEffect(() => {
-    setMaximized(group.api.isMaximized());
-    const subscription = containerApi.onDidMaximizedGroupChange(() => setMaximized(group.api.isMaximized()));
-    return () => subscription.dispose();
-  }, [containerApi, group]);
-  const toggleMax = () => (maximized ? group.api.exitMaximized() : group.api.maximize());
-  const only = containerApi.groups.length <= 1;
-  return (
-    <div className="mh-header-split">
-      <button type="button" className="mh-dock-btn" aria-label="Split right" title="Split right" onPointerDown={stop} onClick={() => split(containerApi, group, "right")}>
-        <SplitRightIcon size={14} />
-      </button>
-      <button type="button" className="mh-dock-btn" aria-label="Split down" title="Split down" onPointerDown={stop} onClick={() => split(containerApi, group, "below")}>
-        <SplitDownIcon size={14} />
-      </button>
-      <button
-        type="button"
-        className="mh-dock-btn"
-        aria-label={maximized ? "Restore the layout" : "Maximise this container"}
-        title={maximized ? "Restore the layout" : "Maximise this container"}
-        disabled={only && !maximized}
-        onPointerDown={stop}
-        onClick={toggleMax}
-      >
-        {maximized ? <RestoreIcon size={13} /> : <MaximizeIcon size={13} />}
-      </button>
-      <button
-        type="button"
-        className="mh-dock-btn"
-        aria-label="Close this container"
-        title="Close this container"
-        disabled={only}
-        onPointerDown={stop}
-        onClick={() => {
-          for (const panel of [...group.panels]) panel.api.close();
-        }}
-      >
-        <CloseIcon size={11} />
-      </button>
-    </div>
-  );
-}
-
-/* -- views ------------------------------------------------------------------------------------- */
-
-export type Preset = "one" | "side" | "stacked" | "three" | "grid";
-
-/**
- * The layouts of the Layout menu, each with its picture: the rectangles (x, y, w, h as fractions
- * of the desk) its containers take. `rows` x `cols` stays for the 2 x 2 straddle grid.
- */
-export const PRESETS: readonly { id: Preset; name: string; short: string; rects: readonly (readonly [number, number, number, number])[] }[] = [
-  { id: "one", name: "One panel", short: "One panel", rects: [[0, 0, 1, 1]] },
-  { id: "side", name: "Straddle and option chain", short: "Chart + chain", rects: [[0, 0, 0.6, 1], [0.6, 0, 0.4, 1]] },
-  { id: "stacked", name: "Straddle above option chain", short: "Chart over chain", rects: [[0, 0, 1, 0.6], [0, 0.6, 1, 0.4]] },
-  { id: "three", name: "Straddle, option chain and details", short: "Chart + chain + details", rects: [[0, 0, 0.6, 1], [0.6, 0, 0.4, 0.62], [0.6, 0.62, 0.4, 0.38]] },
-  { id: "grid", name: "Four straddles and the table", short: "4 straddles + table", rects: [[0, 0, 0.5, 0.35], [0.5, 0, 0.5, 0.35], [0, 0.35, 0.5, 0.35], [0.5, 0.35, 0.5, 0.35], [0, 0.7, 1, 0.3]] },
-];
-
-/** The underlyings a preset's containers open on, in reading order. */
-const PRESET_PICKS = ["NIFTY", "BANKNIFTY", "SENSEX", "CRUDEOIL"];
-
-/** Lays the whole desk out as one of the PRESETS. */
-export function applyPreset(api: DockviewApi, preset: Preset) {
-  api.clear();
-  const straddle = (index: number, position?: Position) => {
-    const autoPick = PRESET_PICKS[index % PRESET_PICKS.length]!;
-    return api.addPanel({ id: nextId(), component: "straddle", title: autoPick, params: { pick: null, autoPick } satisfies StraddleParams, position });
-  };
-  const chain = (position: Position) => api.addPanel({ id: nextId("chain"), component: "chain", title: "Option chain", params: { pick: readPick() } satisfies ChainParams, position });
-  if (preset === "one") {
-    straddle(0);
-  } else if (preset === "side" || preset === "stacked") {
-    const first = straddle(0);
-    const second = chain({ referencePanel: first, direction: preset === "side" ? "right" : "below" });
-    if (preset === "side") second.api.setSize({ width: Math.round(api.width * (1 - KEEP)) });
-    else second.api.setSize({ height: Math.round(api.height * 0.4) });
-    first.api.setActive();
-  } else if (preset === "three") {
-    const first = straddle(0);
-    const second = chain({ referencePanel: first, direction: "right" });
-    second.api.setSize({ width: Math.round(api.width * (1 - KEEP)) });
-    const third = addPanelOf(api, "details", { referencePanel: second, direction: "below" });
-    third.api.setSize({ height: Math.round(api.height * 0.38) });
-    first.api.setActive();
-  } else {
-    const a = straddle(0);
-    const b = straddle(1, { referencePanel: a, direction: "right" });
-    straddle(2, { referencePanel: a, direction: "below" });
-    straddle(3, { referencePanel: b, direction: "below" });
-    // No reference: the table takes the whole bottom edge of the desk.
-    const table = addPanelOf(api, "table", { direction: "below" });
-    table.api.setSize({ height: Math.round(api.height * 0.3) });
-    a.api.setActive();
-  }
-}
-
-/**
- * Switches the title bar's screen: the layout in front is kept under its own name and the other
- * screen's comes back; one that was never opened starts from its default (the Straddle screen: the
- * chart with a narrow chain beside it; the Option chain screen: the chain wide, the chart narrow).
- */
-export function switchView(api: DockviewApi, to: View) {
-  if (to === activeView) return;
-  try {
-    localStorage.setItem(viewKey(activeView), JSON.stringify(api.toJSON()));
-    localStorage.setItem(VIEW_KEY, to);
-  } catch {
-    // A per-viewer convenience only.
-  }
-  activeView = to;
-  let restored = false;
-  try {
-    const saved = localStorage.getItem(viewKey(to));
-    if (saved) {
-      api.fromJSON(JSON.parse(saved));
-      restored = api.panels.length > 0;
-    }
-  } catch {
-    api.clear();
-  }
-  if (restored) return;
-  api.clear();
-  if (to === "workspace") {
-    applyPreset(api, "side");
-    return;
-  }
-  const chart = api.addPanel({ id: nextId(), component: "straddle", title: "New straddle", params: { pick: readPick() } satisfies StraddleParams });
-  const chain = api.addPanel({
-    id: nextId("chain"),
-    component: "chain",
-    title: "Option chain",
-    params: { pick: readPick() } satisfies ChainParams,
-    position: { referencePanel: chart, direction: to === "straddle" ? "right" : "left" },
-  });
-  if (to === "straddle") chain.api.setSize({ width: Math.round(api.width * 0.3) });
-  else chart.api.setSize({ width: Math.round(api.width * 0.32) });
-  (to === "straddle" ? chart : chain).api.setActive();
-}
-
-/** The desk a first visit opens on: one container, on the last pick this computer made. */
-function opening(api: DockviewApi) {
-  const pick = readPick();
-  api.addPanel({ id: nextId(), component: "straddle", title: titleOf(pick), params: { pick } satisfies StraddleParams });
-}
-
-export function Workspace({ hub, themeKey, onApi }: Readonly<{ hub: Hub; themeKey: string; onApi?: (api: DockviewApi) => void }>) {
+export function Workspace({
+  hub,
+  themeKey,
+  onApi,
+  onDocked,
+}: Readonly<{ hub: Hub; themeKey: string; onApi?: (api: DockviewApi) => void; onDocked?: (kind: ChartKind) => void }>) {
   const [api, setApi] = useState<DockviewApi | null>(null);
   const host = useRef<HTMLDivElement>(null);
+  const docked = useRef(onDocked);
+  docked.current = onDocked;
 
   const ready = (event: DockviewReadyEvent) => {
     setApi(event.api);
     onApi?.(event.api);
-    // StrictMode mounts twice in development; a second restore would add every panel again.
+    // StrictMode mounts twice in development; a second restore would add every chart again.
     if (event.api.panels.length > 0) return;
-    try {
-      const saved = localStorage.getItem(viewKey(activeView));
-      if (saved) {
-        event.api.fromJSON(JSON.parse(saved));
-        if (event.api.panels.length > 0) return;
-      }
-    } catch {
-      // A layout that will not restore is dropped rather than half applied.
-      event.api.clear();
-    }
-    opening(event.api);
+    if (!loadDesk(event.api, readSaved())) opening(event.api);
   };
 
   // Saved as it changes, coalesced.
@@ -642,7 +560,7 @@ export function Workspace({ hub, themeKey, onApi }: Readonly<{ hub: Hub; themeKe
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         try {
-          localStorage.setItem(viewKey(activeView), JSON.stringify(api.toJSON()));
+          localStorage.setItem(DESK_KEY, JSON.stringify(deskState(api)));
         } catch {
           // A per-viewer convenience only.
         }
@@ -655,28 +573,82 @@ export function Workspace({ hub, themeKey, onApi }: Readonly<{ hub: Hub; themeKe
     };
   }, [api]);
 
-  // "Add straddle" on a chart: the option chain to pick from, in front, or a new one beside it.
+  // Cells are moved by their tabs, and Delta × OI is dragged in from the side panel's header.
   useEffect(() => {
     if (!api) return;
-    const open = () => {
-      const chain = api.panels.find((p) => p.id.startsWith("chain"));
-      if (chain) chain.api.setActive();
-      else addPanelOf(api, "chain", { referenceGroup: api.activeGroup ?? undefined, direction: "right" });
+    const subscriptions = [
+      // A cell is one chart: a tab dropped on another cell's middle would stack the two, so only
+      // the edges (which open a cell beside, above or below) take a cell that is being moved.
+      api.onWillShowOverlay((e) => {
+        if (e.position === "center" && e.getData()) e.preventDefault();
+      }),
+      // A drag from the side panel is taken where there is room for it.
+      api.onUnhandledDragOverEvent((e) => {
+        if (e.nativeEvent.dataTransfer?.types.includes(DOCK_DRAG) && canDock(api, e.position)) e.accept();
+      }),
+      api.onDidDrop((e) => {
+        const kind = e.nativeEvent.dataTransfer?.getData(DOCK_DRAG);
+        if (isChartKind(kind) && dockDropped(api, e)) docked.current?.(kind);
+      }),
+      // The picker names the layout on screen: after a container is moved, added or closed.
+      api.onDidMovePanel(() => syncSoon(api)),
+      api.onDidAddGroup(() => syncSoon(api)),
+      api.onDidRemoveGroup(() => syncSoon(api)),
+    ];
+    // Ctrl Shift M: the active container fills the desk, and again gives it back (QuantDesk's key).
+    const maximize = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || !e.shiftKey || e.altKey || e.key.toLowerCase() !== "m") return;
+      const panel = api.activePanel;
+      if (!panel) return;
+      e.preventDefault();
+      if (panel.group.api.isMaximized()) panel.group.api.exitMaximized();
+      else api.maximizeGroup(panel);
     };
-    window.addEventListener("mh-add-straddle", open);
-    return () => window.removeEventListener("mh-add-straddle", open);
+    window.addEventListener("keydown", maximize);
+    return () => {
+      window.removeEventListener("keydown", maximize);
+      for (const each of subscriptions) each.dispose();
+    };
   }, [api]);
 
-  // An emptied desk is never left blank: closing the last tab opens a fresh one.
+  // Rows and columns even out as cells come and go, and glide to where they land (QuantDesk's).
+  useEffect(() => (api ? installDockBalance(api) : undefined), [api]);
+
+  // The toolbar follows the active chart.
+  useEffect(() => {
+    if (!api) return;
+    setActivePanel(api.activePanel?.id ?? null);
+    const subscription = api.onDidActivePanelChange((panel) => setActivePanel(panel?.id ?? null));
+    return () => {
+      subscription.dispose();
+      setActivePanel(null);
+    };
+  }, [api]);
+
+  // A click anywhere on a chart makes it the active one, canvas and legend alike: a chart that does
+  // not take the focus would otherwise leave the toolbar on the last one.
+  useEffect(() => {
+    const el = host.current;
+    if (!api || !el) return;
+    const activate = (e: PointerEvent) => {
+      const cell = (e.target as Element | null)?.closest(".dv-groupview");
+      const group = cell ? api.groups.find((g) => g.element === cell || g.element.contains(cell)) : undefined;
+      if (group?.activePanel && !group.activePanel.api.isActive) group.activePanel.api.setActive();
+    };
+    el.addEventListener("pointerdown", activate, true);
+    return () => el.removeEventListener("pointerdown", activate, true);
+  }, [api]);
+
+  // An emptied grid is never left blank.
   useEffect(() => {
     if (!api) return;
     const subscription = api.onDidRemovePanel(() => {
-      if (api.panels.length === 0) addStraddle(api, undefined);
+      if (api.panels.length === 0) queueMicrotask(() => api.panels.length === 0 && opening(api));
     });
     return () => subscription.dispose();
   }, [api]);
 
-  // A container grows in once, when it is made (styles: `.mh-entering`).
+  // A new cell fades in once when it is made (styles: `.mh-entering`).
   useEffect(() => {
     if (!api) return;
     const subscription = api.onDidAddGroup((group) => {
@@ -687,9 +659,7 @@ export function Workspace({ hub, themeKey, onApi }: Readonly<{ hub: Hub; themeKe
     return () => subscription.dispose();
   }, [api]);
 
-  // Fullscreen on and off resizes the window without changing its width, so this should never
-  // matter — dockview watches its own element with a ResizeObserver and relays out on its own.
-  // A double click on a divider puts the two sides back to their default share.
+  // A double click on a divider evens the two sides.
   useEffect(() => {
     const el = host.current;
     if (!api || !el) return;
@@ -701,18 +671,15 @@ export function Workspace({ hub, themeKey, onApi }: Readonly<{ hub: Hub; themeKe
     return () => el.removeEventListener("dblclick", onDouble);
   }, [api]);
 
-  // Chrome was seen leaving a stale, too-wide layout after exiting fullscreen even so (a
-  // horizontal scrollbar on a page that never otherwise has one), so the dock is told its host's
-  // real size explicitly once the transition settles, past whatever frame that glitch landed in.
+  // Chrome was seen leaving a stale, too-wide layout after exiting fullscreen (a horizontal
+  // scrollbar on a page that never otherwise has one), so the dock is told its host's real size
+  // once the transition settles.
   useEffect(() => {
     if (!api) return;
     const relayout = () => {
       requestAnimationFrame(() => {
         const el = host.current;
-        if (!el) return;
-        // The host's padding is room round the desk, not the desk's own.
-        const pad = parseFloat(getComputedStyle(el).paddingLeft) || 0;
-        api.layout(el.clientWidth - 2 * pad, el.clientHeight - 2 * pad, true);
+        if (el) api.layout(el.clientWidth, el.clientHeight, true);
       });
     };
     document.addEventListener("fullscreenchange", relayout);
@@ -725,12 +692,22 @@ export function Workspace({ hub, themeKey, onApi }: Readonly<{ hub: Hub; themeKe
         <DockviewReact
           components={COMPONENTS}
           defaultTabComponent={DeskTab}
-          prefixHeaderActionsComponent={HeaderSlot}
-          leftHeaderActionsComponent={HeaderAdd}
-          rightHeaderActionsComponent={HeaderSplit}
+          leftHeaderActionsComponent={AddContainer}
+          rightHeaderActionsComponent={ContainerActions}
           onReady={ready}
           className="mh-dock dockview-theme-dark"
         />
+        {api && (
+          <DropMap
+            api={api}
+            host={host}
+            place={(kind, where, cell) => {
+              const done = dockKind(api, kind, where, cell);
+              if (done) docked.current?.(kind);
+              return done;
+            }}
+          />
+        )}
       </div>
     </Desk.Provider>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createChart, PaneLegend, type Chart, type CrosshairMoveEvent, type LegendValue, type SeriesApi, type SeriesDataItem } from "openalgo-charts";
 
 import { priceAxisWidth, themeFromPage, token } from "../chart/chartTheme";
@@ -7,6 +7,9 @@ import { fmt0, fmt2 } from "../core/format";
 import type { Bar } from "../hub/types";
 import { Spinner } from "../ui/icons";
 import { PaneGrip } from "../chart/PaneGrip";
+import { MeasureLayer } from "../chart/MeasureLayer";
+import { registerChart } from "../chart/registry";
+import { usePanelId } from "../shell/headerSlot";
 import { LivePulse, type PulseDot } from "./LivePulse";
 import type { StrikeLine } from "./useStrikeLines";
 
@@ -80,7 +83,7 @@ const READ_ORDER: LineId[] = ["straddle", "vwap", "fut", "spot", "iv", "vix"];
 export const lineOf = (id: LineId) => LINES.find((l) => l.id === id)!;
 
 /** The legend's text, CSS px: TradingView's status line is a size up from its axes. */
-const LEGEND_FONT = 13;
+const LEGEND_FONT = 14;
 
 const STORE_KEY = "mh.straddle.hidden";
 
@@ -285,6 +288,8 @@ export function StraddleChart({
   onRetry,
   extras = [],
   legend,
+  table,
+  readouts,
   onHover,
   live = false,
   showVix = true,
@@ -297,6 +302,10 @@ export function StraddleChart({
   extras?: readonly StrikeLine[];
   /** The price pane's status line, laid 4px inside its plot's top-left corner. */
   legend?: ReactNode;
+  /** The data table, pinned in the plot's bottom-right corner; it gives way where it would cover the legend. */
+  table?: ReactNode;
+  /** A line of readouts in the plot's top-right corner, under the toolbar's; it gives way as the table does. */
+  readouts?: ReactNode;
   /** The minute under the crosshair (epoch seconds), or null when it leaves: for the chips row. */
   onHover?: (time: number | null) => void;
   bars: readonly Bar[];
@@ -336,6 +345,7 @@ export function StraddleChart({
   const focusRef = useRef(focus);
   focusRef.current = focus;
   useChartPixelSnap(frame, host);
+  const panelId = usePanelId();
   // The minute under the crosshair (epoch seconds), or null: the legends read it.
   const [hoverTime, setHoverTime] = useState<number | null>(null);
 
@@ -358,6 +368,8 @@ export function StraddleChart({
       timeScale: { lockVisibleTimeRangeOnResize: true },
     });
     chartRef.current = chart;
+    // On the desk's list, for the tools bar (its panel never changes while it is mounted).
+    const unregister = panelId ? registerChart(panelId, chart) : () => {};
     for (const line of LINES) {
       const series = chart.addSeries("line", {
         paneIndex: line.pane,
@@ -458,6 +470,7 @@ export function StraddleChart({
       offZoom();
       offClick();
       offMove();
+      unregister();
       chart.destroy();
       chartRef.current = null;
       series.clear();
@@ -597,32 +610,112 @@ export function StraddleChart({
   }, [history]);
 
   // Where the price pane's plot is, so the status line sits inside it, past the left price axis,
-  // as the axis widens with its numbers and as the panel resizes.
-  const [plot, setPlot] = useState<{ left: number; top: number; width: number } | null>(null);
+  // and the data table in its foot's right corner: as the axis widens with its numbers, as the
+  // panel resizes, and as the divider over the vol pane is dragged (which moves the price pane's
+  // foot without resizing the chart: followed while a button is down, and once more on release).
+  const [plot, setPlot] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   useEffect(() => {
     const element = host.current;
+    const box = frame.current;
     if (!element) return;
     const read = () => {
       const r = chartRef.current?.plotRect(0) ?? null;
-      setPlot((was) => (!r ? null : was && was.left === r.left && was.top === r.top && was.width === r.width ? was : { left: r.left, top: r.top, width: r.width }));
+      setPlot((was) =>
+        !r ? null : was && was.left === r.left && was.top === r.top && was.width === r.width && was.height === r.height ? was : { left: r.left, top: r.top, width: r.width, height: r.height },
+      );
+    };
+    let queued = 0;
+    const later = () => {
+      if (!queued)
+        queued = requestAnimationFrame(() => {
+          queued = 0;
+          read();
+        });
     };
     const raf = requestAnimationFrame(read);
-    const ro = new ResizeObserver(() => requestAnimationFrame(read));
+    const ro = new ResizeObserver(later);
     ro.observe(element);
+    const dragging = (e: PointerEvent) => {
+      if (e.buttons) later();
+    };
+    box?.addEventListener("pointermove", dragging);
+    const offResized = chartRef.current?.on("paneResized", later);
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(queued);
       ro.disconnect();
+      box?.removeEventListener("pointermove", dragging);
+      offResized?.();
     };
   }, [bars]);
+
+  // The readout line and the table never cover the legend, and never run out of the plot over an
+  // axis. The line sits level with the legend's first line where there is room, and a line lower
+  // (beside the legend's short rows) where that long first line reaches under it; on a pane too
+  // short or too slim for one, it gives way. Measured after every render, as values change the
+  // widths, and whenever one of them resizes (the legend folding, the panel narrowing).
+  const legendBox = useRef<HTMLDivElement>(null);
+  const tableBox = useRef<HTMLDivElement>(null);
+  const readoutsBox = useRef<HTMLDivElement>(null);
+  const place = useCallback(() => {
+    const legendRows = legendBox.current ? [...legendBox.current.querySelectorAll(".mh-legend-row, .mh-legend-toggler")].map((row) => row.getBoundingClientRect()) : [];
+    const firstLine = legendBox.current?.querySelector(".mh-legend-main")?.getBoundingClientRect();
+    // A corner piece gives way where it runs out of the plot or would cover what was placed before
+    // it; one that may `drop` tries a line under the legend's first before giving way.
+    const settle = (box: HTMLDivElement | null, avoid: readonly DOMRect[], drop: boolean): DOMRect | null => {
+      const piece = box?.firstElementChild;
+      if (!box || !piece) return null;
+      box.style.transform = "";
+      const r = piece.getBoundingClientRect();
+      // Room kept clear round the legend's rows: 12px beside, 8px under.
+      const covers = (dy: number) => avoid.some((q) => q.right + 12 > r.left && q.left < r.right && q.bottom + 8 > r.top + dy && q.top < r.bottom + dy);
+      let dy = 0;
+      if (drop && firstLine && covers(0)) dy = Math.ceil(firstLine.bottom + 8 - r.top);
+      const collides = r.width > box.clientWidth || r.height > box.clientHeight || covers(dy);
+      box.style.transform = dy > 0 && !collides ? `translateY(${dy}px)` : "";
+      box.toggleAttribute("data-collides", collides);
+      return collides ? null : new DOMRect(r.x, r.y + dy, r.width, r.height);
+    };
+    // The readout line first (it is the smaller and the more read), then the table, which also keeps
+    // clear of it on a short pane.
+    const line = settle(readoutsBox.current, legendRows, true);
+    settle(tableBox.current, line ? [...legendRows, line] : legendRows, false);
+  }, []);
+  useLayoutEffect(place);
+  useEffect(() => {
+    const ro = new ResizeObserver(place);
+    for (const box of [legendBox, tableBox, readoutsBox]) if (box.current?.firstElementChild) ro.observe(box.current.firstElementChild);
+    return () => ro.disconnect();
+  }, [place, plot, table !== undefined, readouts !== undefined]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="oa-chart-frame" ref={frame}>
       <div ref={host} className="oa-chart" aria-label="ATM straddle session: spot, synthetic future, ATM IV, India VIX, premium and its VWAP" />
       {legend && plot ? (
-        <div className="mh-legend-anchor" style={{ left: plot.left + 8, top: plot.top + 6, width: plot.width - 16 }}>
+        <div ref={legendBox} className="mh-legend-anchor" style={{ left: plot.left + 8, top: plot.top + 6, width: plot.width - 16 }}>
           {legend}
         </div>
       ) : null}
+      {readouts && plot ? (
+        <div ref={readoutsBox} className="mh-chart-readouts-anchor" style={{ left: plot.left + 8, top: plot.top + 6, width: plot.width - 16 }}>
+          {readouts}
+        </div>
+      ) : null}
+      {table && plot ? (
+        <div ref={tableBox} className="mh-dtable-anchor" style={{ left: plot.left + 8, top: plot.top + 8, width: plot.width - 16, height: plot.height - 16 }}>
+          {table}
+        </div>
+      ) : null}
+      <MeasureLayer
+        getChart={() => chartRef.current}
+        stepSec={60}
+        // Measured on the premium, the chart's own figure, on its left-hand scale.
+        toPrice={(y) => {
+          const top = chartRef.current?.plotRect(0)?.top;
+          const series = seriesRef.current.get(MAIN_LINE);
+          return top === undefined || !series || y < top ? null : series.priceScale().yToPrice(y - top);
+        }}
+      />
 
       {history === "loading" || history === "error" || (history === "exhausted" && endNote) ? (
         <div className={history === "error" ? "chart-history mh-error" : "chart-history"} role="status">

@@ -10,13 +10,15 @@ import { Popover } from "./Popover";
  * clipped by its panel), a checkbox on every row, ticked on the picked ones. A click toggles
  * membership and leaves the list open, so several can be picked in one visit; Escape, Tab or a
  * click outside closes it. A long list opens with a search box, a short one jumps to what is typed.
- * ↑/↓ (and Home/End without a search box) move; Enter toggles the active item.
+ * ↑/↓ (and Home/End without a search box) move; Enter toggles the active item. With `icon` the
+ * trigger is an icon button instead (TradingView's fx), its label the tooltip.
  */
 export function MultiDropdown<T extends string>({
   label,
   value,
   options,
   onChange,
+  icon,
   renderValue,
   caption = true,
   search,
@@ -25,6 +27,8 @@ export function MultiDropdown<T extends string>({
   value: readonly T[];
   options: readonly DropdownOption<T>[];
   onChange: (value: T[]) => void;
+  /** An icon-only trigger. */
+  icon?: ReactNode;
   renderValue?: (picked: readonly DropdownOption<T>[]) => ReactNode;
   /** The label before the pick on the trigger; off when the pick says it all. */
   caption?: boolean;
@@ -101,10 +105,12 @@ export function MultiDropdown<T extends string>({
       <button
         ref={trigger}
         type="button"
-        className="mh-picker"
+        className={icon ? "mh-icon-btn" : "mh-picker"}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
+        aria-label={icon ? label : undefined}
+        title={icon ? label : undefined}
         onClick={() => (open ? close(false) : show())}
         onKeyDown={(e) => {
           if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
@@ -113,9 +119,13 @@ export function MultiDropdown<T extends string>({
           }
         }}
       >
-        {caption ? <span className="mh-picker-caption">{label}</span> : null}
-        <span className="mh-picker-value">{renderValue ? renderValue(picked) : picked.map((o) => o.label).join(", ") || null}</span>
-        <ChevronDownIcon size={13} />
+        {icon ?? (
+          <>
+            {caption ? <span className="mh-picker-caption">{label}</span> : null}
+            <span className="mh-picker-value">{renderValue ? renderValue(picked) : picked.map((o) => o.label).join(", ") || null}</span>
+            <ChevronDownIcon size={13} />
+          </>
+        )}
       </button>
       {open ? (
         <Popover anchor={trigger} boxRef={box}>

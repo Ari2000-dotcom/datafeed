@@ -7,8 +7,9 @@ import { useLayoutEffect, useState } from "react";
  *
  * Every element in the row marked `data-drop="n"` can give way, the lowest `n` first, all of one rank
  * together (the CE and PE legs). Each pass shows them all, then hides rank by rank until the row
- * stops overflowing. It runs after every render, as new values change the widths, and whenever the
- * row's container or one of its pieces changes size.
+ * stops overflowing, then gives back any rank hidden on the way that fits the room left over. It
+ * runs after every render, as new values change the widths, and whenever the row's container or
+ * one of its pieces changes size.
  *
  * Returns the ref callback to put on the row.
  */
@@ -62,16 +63,32 @@ function piecesOf(row: HTMLElement) {
   return { pieces, ranks, setHidden };
 }
 
+/**
+ * The room a wide piece left: once the row fits, each rank hidden before the last one that had to
+ * go gets one try back, most needed first, and stays if the row still holds it. Without this a
+ * long piece giving way (Syn fut and its move) left a gap where a short one hidden before it
+ * (Spot's move) would have fitted.
+ */
+function backfill(gone: readonly number[], setHidden: (rank: number, hidden: boolean) => void, row: HTMLElement, overflows: (row: HTMLElement) => boolean): void {
+  for (const rank of [...gone].reverse()) {
+    setHidden(rank, false);
+    if (overflows(row)) setHidden(rank, true);
+  }
+}
+
 /** From nothing hidden: after a render, when any value may have changed width. */
 function fit(row: HTMLElement, overflows: (row: HTMLElement) => boolean): void {
   const { pieces, ranks, setHidden } = piecesOf(row);
   for (const piece of pieces) piece.hidden = false;
   let over = overflows(row);
+  const gone: number[] = [];
   for (const rank of ranks) {
     if (!over) break;
     setHidden(rank, true);
+    gone.push(rank);
     over = overflows(row);
   }
+  if (!over) backfill(gone.slice(0, -1), setHidden, row, overflows);
   // Still over with everything given way (a wrapping row on two lines): styles can lay it out for that.
   row.toggleAttribute("data-overflowing", over);
 }
@@ -79,28 +96,32 @@ function fit(row: HTMLElement, overflows: (row: HTMLElement) => boolean): void {
 /**
  * From what is hidden now: on a resize, which a splitter drag sends every frame. Showing every
  * piece only to hide them again cost a layout per rank on each frame; this hides the next rank
- * while the row is over, or gives back the last one hidden while the room holds it, so a frame
- * that changes nothing costs one or two measurements. Ranks still go lowest first.
+ * while the row is over (then backfills), or gives back each hidden rank the room holds, most
+ * needed first, so a frame that changes nothing costs a measurement per hidden rank.
  */
 function refit(row: HTMLElement, overflows: (row: HTMLElement) => boolean): void {
   const { pieces, ranks, setHidden } = piecesOf(row);
   const hidden = ranks.filter((rank) => pieces.some((p) => rankOf(p) === rank && p.hidden));
   let over = overflows(row);
   if (over) {
+    let last: number | null = null;
     for (const rank of ranks) {
       if (hidden.includes(rank)) continue;
       setHidden(rank, true);
+      last = rank;
       over = overflows(row);
       if (!over) break;
     }
+    if (!over && last !== null) backfill(hidden.filter((rank) => rank < last!), setHidden, row, overflows);
   } else {
-    for (const rank of hidden.reverse()) {
-      setHidden(rank, false);
-      if (overflows(row)) {
-        setHidden(rank, true);
-        break;
-      }
+    // A short, less needed piece that took the room in a squeeze (IV) would keep a more needed
+    // one (spot) out as the row widens again: with one shown over one hidden, start over.
+    const shown = ranks.filter((rank) => !hidden.includes(rank));
+    if (hidden.some((h) => shown.some((s) => s < h))) {
+      fit(row, overflows);
+      return;
     }
+    backfill(hidden, setHidden, row, overflows);
   }
   row.toggleAttribute("data-overflowing", over);
 }

@@ -1,35 +1,63 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DockviewApi } from "dockview";
 
-import { applyCanvas, CANVAS_TONES, loadCanvas, type CanvasId } from "./core/canvas";
-import { Hub, hubUrl, type HubStatus } from "./hub/client";
-import { Ticker } from "./shell/Ticker";
+import { applyCanvas, loadCanvas, type CanvasId } from "./core/canvas";
+import { usePage } from "./core/route";
+import { Hub, hubUrl } from "./hub/client";
 import { UpdateToast } from "./shell/UpdateToast";
-import { addPanelOf, applyPreset, currentView, PANEL_KINDS, PanelIcon, PRESETS, switchView, VIEWS, Workspace, type Preset, type View } from "./shell/Workspace";
+import { applyArrangement, CHART_KINDS, dockKind, isChartKind, loadDesk, replaceChart, useArrangement, Workspace, type ChartKind } from "./shell/Workspace";
+import { ARRANGEMENTS, arrangementOf } from "./shell/arrangements";
+import { AppBar } from "./shell/AppBar";
+import { ChainPage } from "./shell/ChainPage";
+import { setToolbarSlot, useActivePanel } from "./shell/headerSlot";
+import { LayoutsMenu } from "./shell/WorkspaceMenu";
+import { ToolsBar } from "./shell/ToolsBar";
+import { Rail, SIDE_DEFAULT, SIDE_MAX, SIDE_MIN, SidePanel, type SideId } from "./shell/SideBar";
+import { BOTTOM_DEFAULT, BOTTOM_MIN, BottomPanel, Footer, type BottomId } from "./shell/Footer";
+import { NavDrawer } from "./shell/NavDrawer";
 import { useFullscreen } from "./core/fullscreen";
 import { Dropdown } from "./ui/Dropdown";
-import { ChainIcon, ChartIcon, FullscreenEnterIcon, FullscreenExitIcon, PaletteIcon } from "./ui/icons";
-import { Logo } from "./ui/Logo";
-import { WorkspaceNav } from "./shell/WorkspaceMenu";
+import { ArrangementGlyph } from "./ui/icons";
 import type { SavedWorkspace } from "./core/workspaces";
 
-const STATUS_TEXT: Record<HubStatus, string> = {
-  connecting: "Connecting",
-  open: "Live",
-  reconnecting: "Reconnecting",
-  closed: "Disconnected",
-};
+/*
+ * The site: the app bar across the top (the menu, the mark, the pages, and the indices, the feed,
+ * the canvas tone and fullscreen), and under it the page that is open. Charts is the desk,
+ * TradingView's way: the chart toolbar (the active chart's controls, the layout and the saved
+ * layouts), the tools bar down the left, the chart grid with the bottom panel and the footer under
+ * it, and the side panel with its rail on the right, every region a plate on the workspace tone.
+ * Option chain is the chain and Delta × OI side by side.
+ */
 
-const STATUS_TONE: Record<HubStatus, string> = {
-  connecting: "mh-busy",
-  open: "mh-ok",
-  reconnecting: "mh-busy",
-  closed: "mh-error",
-};
+/** Which side and bottom panels are open and how big, on this computer. */
+interface ShellState {
+  side: SideId | null;
+  sideWidth: number;
+  bottom: BottomId | null;
+  bottomHeight: number;
+}
+const SHELL_KEY = "mh.shell";
+const SHELL_DEFAULT: ShellState = { side: null, sideWidth: SIDE_DEFAULT, bottom: null, bottomHeight: BOTTOM_DEFAULT };
+
+function loadShell(): ShellState {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SHELL_KEY) ?? "null") as Partial<ShellState> | null;
+    if (!raw) return SHELL_DEFAULT;
+    return {
+      side: raw.side === "chain" || raw.side === "deltaoi" ? raw.side : null,
+      sideWidth: typeof raw.sideWidth === "number" ? Math.min(SIDE_MAX, Math.max(SIDE_MIN, Math.round(raw.sideWidth))) : SIDE_DEFAULT,
+      bottom: raw.bottom === "table" || raw.bottom === "details" ? raw.bottom : null,
+      bottomHeight: typeof raw.bottomHeight === "number" ? Math.max(BOTTOM_MIN, Math.round(raw.bottomHeight)) : BOTTOM_DEFAULT,
+    };
+  } catch {
+    return SHELL_DEFAULT;
+  }
+}
 
 export function App() {
   const [canvas, setCanvas] = useState<CanvasId>(loadCanvas);
   useEffect(() => applyCanvas(canvas), [canvas]);
+  const page = usePage();
 
   // The site is open to everyone: one connection per page, no key. The hub
   // client reconnects by itself, so a hub that is down reads "Reconnecting".
@@ -43,175 +71,175 @@ export function App() {
     };
   }, []);
 
-  const [status, setStatus] = useState<HubStatus>("connecting");
   const dock = useRef<DockviewApi | null>(null);
-  const [view, setView] = useState<View>(currentView);
-  const [layout, setLayout] = useState<Preset | "custom">("custom");
-  const [panelCount, setPanelCount] = useState(0);
-  // Runs a change a menu makes on the dock.
+  const [dockApi, setDockApi] = useState<DockviewApi | null>(null);
+  // Off the Charts page the desk is not mounted: nothing to act on until it is back.
+  useEffect(() => {
+    if (page === "charts") return;
+    dock.current = null;
+    setDockApi(null);
+  }, [page]);
   const lay = (fn: (api: DockviewApi) => void) => {
     const api = dock.current;
     if (api) fn(api);
   };
-  // A saved workspace: on the Workspace screen, its layout laid in place of this one.
-  const loadWorkspace = (workspace: SavedWorkspace) => {
-    setView("workspace");
-    setLayout("custom");
-    lay((api) => {
-      if (currentView() !== "workspace") switchView(api, "workspace");
-      try {
-        api.fromJSON(workspace.layout as Parameters<DockviewApi["fromJSON"]>[0]);
-      } catch {
-        // A layout that will not restore leaves the desk as it was.
-      }
-    });
-  };
-  // The Layout trigger's count follows the dock itself: a tab closed, a split or a restored screen.
-  const [dockApi, setDockApi] = useState<DockviewApi | null>(null);
-  useEffect(() => {
-    if (!dockApi) return;
-    const count = () => setPanelCount(dockApi.panels.length);
-    count();
-    const subscriptions = [dockApi.onDidAddPanel(count), dockApi.onDidRemovePanel(count), dockApi.onDidLayoutFromJSON(count)];
-    return () => {
-      for (const each of subscriptions) each.dispose();
-    };
-  }, [dockApi]);
-  useEffect(() => hub?.onStatus(setStatus), [hub]);
+  const loadWorkspace = (workspace: SavedWorkspace) => lay((api) => loadDesk(api, workspace.layout));
   const [fullscreen, toggleFullscreen] = useFullscreen();
+  const arrangement = useArrangement();
+  // The menu drawer: over the page while open, nothing while shut.
+  const [navOpen, setNavOpen] = useState(false);
+  const closeNav = useCallback(() => setNavOpen(false), []);
+  const menuButton = useRef<HTMLButtonElement>(null);
+
+  const [shell, setShell] = useState<ShellState>(loadShell);
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHELL_KEY, JSON.stringify(shell));
+    } catch {
+      // A per-viewer convenience only.
+    }
+  }, [shell]);
+  const toggleSide = (side: SideId) => setShell((s) => ({ ...s, side: s.side === side ? null : side }));
+  const toggleBottom = (bottom: BottomId) => setShell((s) => ({ ...s, bottom: s.bottom === bottom ? null : bottom }));
+
+  // "Add straddle" on a chart: the option chain to pick from, in the side panel.
+  useEffect(() => {
+    const open = () => setShell((s) => ({ ...s, side: "chain" }));
+    window.addEventListener("mh-add-straddle", open);
+    return () => window.removeEventListener("mh-add-straddle", open);
+  }, []);
+
+  // The bottom panel never takes more than 60% of the chart column.
+  const [center, setCenter] = useState<HTMLElement | null>(null);
+  const [centerHeight, setCenterHeight] = useState(0);
+  useEffect(() => {
+    if (!center) return;
+    const ro = new ResizeObserver(() => setCenterHeight(center.clientHeight));
+    ro.observe(center);
+    return () => ro.disconnect();
+  }, [center]);
+  const bottomMax = Math.max(BOTTOM_MIN, Math.round(centerHeight * 0.6));
 
   return (
     <div className="mh-app">
-      <header className="mh-titlebar">
-        <div className="mh-brand">
-          <Logo />
-          <span className="mh-wordmark">
-            Alpha<span className="mh-wordmark-hedge">Hedge</span>
-          </span>
-        </div>
-        <nav className="mh-nav" aria-label="Screens">
-          {VIEWS.map((v) =>
-            v.id === "workspace" ? (
-              <WorkspaceNav
-                key={v.id}
-                active={view === v.id}
-                getApi={() => dock.current}
-                onOpen={() => {
-                  setView(v.id);
-                  setLayout("custom");
-                  lay((api) => switchView(api, v.id));
+      <AppBar
+        page={page}
+        hub={hub}
+        menuButton={menuButton}
+        menuOpen={navOpen}
+        onMenu={() => setNavOpen((v) => !v)}
+        canvas={canvas}
+        onCanvas={setCanvas}
+        fullscreen={fullscreen}
+        onFullscreen={toggleFullscreen}
+      />
+
+      {page === "chain" && hub ? <ChainPage hub={hub} /> : null}
+
+      {page === "charts" ? (
+        <div className="mh-desk" data-side={shell.side ? "" : undefined}>
+          <header className="mh-toolbar mh-plate">
+            <ChartKindPicker api={dockApi} />
+            {/* The chart's kind, then the chart's own controls: two jobs, kept apart as TradingView's groups are. */}
+            <span className="mh-tv-sep" aria-hidden />
+            <div className="mh-toolbar-slot" ref={setToolbarSlot} />
+            <span className="mh-tv-sep" aria-hidden />
+            <Dropdown
+              label="Layout"
+              heading="Layout"
+              icon={<ArrangementGlyph rects={arrangementOf(arrangement).rects} />}
+              align="end"
+              value={arrangement}
+              onChange={(id) => lay((api) => applyArrangement(api, id))}
+              options={ARRANGEMENTS.map((a) => ({ value: a.id, label: a.name, group: `${a.count} ${a.count === 1 ? "chart" : "charts"}`, icon: <ArrangementGlyph rects={a.rects} /> }))}
+            />
+            <LayoutsMenu getApi={() => dock.current} onLoad={loadWorkspace} />
+          </header>
+
+          <ToolsBar />
+
+          <div className="mh-center" ref={setCenter}>
+            {hub ? (
+              <Workspace
+                hub={hub}
+                themeKey={canvas}
+                onApi={(api) => {
+                  dock.current = api;
+                  setDockApi(api);
                 }}
-                onLoad={loadWorkspace}
+                // Delta × OI dragged in from the side panel is in the grid now: the panel shuts.
+                onDocked={(kind) => setShell((s) => (s.side === kind ? { ...s, side: null } : s))}
               />
-            ) : (
-            <button
-              key={v.id}
-              type="button"
-              className="mh-nav-item"
-              aria-current={view === v.id ? "page" : undefined}
-              onClick={() => {
-                setView(v.id);
-                setLayout("custom");
-                lay((api) => switchView(api, v.id));
-              }}
-            >
-              {v.id === "straddle" ? <ChartIcon size={16} /> : <ChainIcon size={16} />}
-              {v.name}
-            </button>
-            ),
-          )}
-        </nav>
-        <span className="mh-spacer" />
-        {hub ? <Ticker hub={hub} /> : null}
-        <span className="mh-feed" title="Connection to the market data feed">
-          <span className={`mh-dot ${STATUS_TONE[status]}`} />
-          {STATUS_TEXT[status]}
-        </span>
-        <Dropdown<string>
-          label="Layout"
-          caption={false}
-          align="end"
-          value={layout === "custom" ? "custom" : `preset:${layout}`}
-          onChange={(value) => {
-            if (value.startsWith("preset:")) {
-              const id = value.slice(7) as Preset;
-              setLayout(id);
-              lay((api) => applyPreset(api, id));
-            } else if (value.startsWith("add:")) {
-              const kind = value.slice(4) as (typeof PANEL_KINDS)[number]["kind"];
-              setLayout("custom");
-              lay((api) => addPanelOf(api, kind, { referenceGroup: api.activeGroup ?? undefined, direction: "right" }));
-            }
-          }}
-          renderValue={() => {
-            const spec = PRESETS.find((p) => p.id === layout);
-            return (
-              <span className="mh-layout-value">
-                <LayoutGlyph rects={spec?.rects ?? [[0, 0, 1, 1]]} />
-                <span className="mh-layout-name">{spec ? spec.short : `Custom · ${panelCount} ${panelCount === 1 ? "panel" : "panels"}`}</span>
-              </span>
-            );
-          }}
-          options={[
-            ...PRESETS.map((p) => ({ value: `preset:${p.id}`, label: p.name, group: "Layout", icon: <LayoutGlyph rects={p.rects} /> })),
-            ...PANEL_KINDS.map((k) => ({ value: `add:${k.kind}`, label: k.name, note: k.note, group: "Add a panel", icon: <PanelIcon kind={k.kind} /> })),
-          ]}
-        />
-        <button
-          type="button"
-          className="mh-icon-btn"
-          onClick={toggleFullscreen}
-          aria-pressed={fullscreen}
-          aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen: hide the browser's own bars"}
-          title={fullscreen ? "Exit fullscreen" : "Fullscreen: hide the browser's own bars"}
-        >
-          {fullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
-        </button>
-        <Dropdown
-          label="Canvas"
-          heading="Canvas"
-          icon={<PaletteIcon />}
-          align="end"
-          value={canvas}
-          onChange={setCanvas}
-          options={CANVAS_TONES.map((tone) => ({
-            value: tone.id,
-            label: tone.name,
-            note: tone.note,
-            icon: (
-              <span className="mh-swatch-tone" data-canvas={tone.id} aria-hidden>
-                <span className="mh-swatch-chrome" />
-                <span className="mh-swatch-page" />
-                <span className="mh-swatch-row" />
-              </span>
-            ),
-          }))}
-        />
-      </header>
-      <main className="mh-main">
-        {hub ? (
-          <Workspace
-            hub={hub}
-            themeKey={canvas}
-            onApi={(api) => {
-              dock.current = api;
-              setDockApi(api);
-            }}
-          />
-        ) : null}
-      </main>
+            ) : null}
+            {hub && shell.bottom ? (
+              <BottomPanel
+                id={shell.bottom}
+                hub={hub}
+                height={shell.bottomHeight}
+                maxHeight={bottomMax}
+                onHeight={(bottomHeight) => setShell((s) => ({ ...s, bottomHeight }))}
+              />
+            ) : null}
+            <Footer open={shell.bottom} onToggle={toggleBottom} onClose={() => setShell((s) => ({ ...s, bottom: null }))} />
+          </div>
+
+          {hub && shell.side ? (
+            <SidePanel
+              id={shell.side}
+              hub={hub}
+              width={shell.sideWidth}
+              onWidth={(sideWidth) => setShell((s) => ({ ...s, sideWidth }))}
+              onClose={() => setShell((s) => ({ ...s, side: null }))}
+              // The button's way of what the drag does: Delta × OI under the active chart.
+              onDock={
+                dockApi && shell.side === "deltaoi"
+                  ? () => {
+                      const api = dockApi;
+                      if (dockKind(api, "deltaoi", "bottom", api.activeGroup ?? api.groups[0])) setShell((s) => ({ ...s, side: null }));
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
+          <Rail open={shell.side} onToggle={toggleSide} />
+        </div>
+      ) : null}
+
+      <NavDrawer
+        open={navOpen}
+        onClose={closeNav}
+        trigger={menuButton}
+        hub={hub}
+        api={page === "charts" ? dockApi : null}
+        arrangement={arrangement}
+        side={shell.side}
+        bottom={shell.bottom}
+        onSide={toggleSide}
+        onBottom={toggleBottom}
+        canvas={canvas}
+        onCanvas={setCanvas}
+        fullscreen={fullscreen}
+        onFullscreen={toggleFullscreen}
+        onLoad={loadWorkspace}
+      />
+
       <UpdateToast />
     </div>
   );
 }
 
-/** A layout's picture: the rectangles its containers take, drawn small. */
-function LayoutGlyph({ rects }: Readonly<{ rects: readonly (readonly [number, number, number, number])[] }>) {
+/** The chart toolbar's first control: what the active chart is, a straddle or a scrip chart. */
+function ChartKindPicker({ api }: Readonly<{ api: DockviewApi | null }>) {
+  const active = useActivePanel();
+  const component = active ? api?.getPanel(active)?.api.component : undefined;
+  if (!api || !active || !isChartKind(component)) return null;
   return (
-    <svg className="mh-glyph" width="20" height="15" viewBox="0 0 18 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden>
-      {rects.map(([x, y, w, h], i) => (
-        <rect key={i} x={1 + x * 16 + 0.5} y={1 + y * 12 + 0.5} width={w * 16 - 1} height={h * 12 - 1} rx="1" />
-      ))}
-    </svg>
+    <Dropdown<ChartKind>
+      label="Chart"
+      caption={false}
+      value={component}
+      onChange={(kind) => replaceChart(api, active, kind)}
+      options={CHART_KINDS.map((k) => ({ value: k.kind, label: k.name, note: k.note }))}
+    />
   );
 }

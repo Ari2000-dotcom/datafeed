@@ -14,10 +14,15 @@ import { fmt0 } from "../core/format";
  *   today as an outline beyond it (where the bar stood at yesterday's close). The strikes that
  *   added the most call and put OI are named beside their bars.
  *
- * The largest reaches across the whole plot, so the profile reads at full length; the fills are
- * translucent and drawn behind the candles (`zOrder: "bottom"`), so the price action stays legible
- * over it. A bar is never thicker than its strike's share of the height allows, so neighbouring
- * strikes never run into each other however far the price scale is zoomed out.
+ * The largest strike on screen sets the scale, so the profile reads at full length wherever the
+ * chart is scrolled, as TradingView's visible-range volume profile does; the fills are translucent
+ * and drawn behind the candles (`zOrder: "bottom"`), so the price action stays legible over it. A
+ * bar is never thicker than its strike's share of the height allows, so neighbouring strikes never
+ * run into each other however far the price scale is zoomed out.
+ *
+ * Its figures are call-outs in the chart's own tag shape (the axis's name boxes: the series'
+ * colour, a 16px box rounded an eighth of its height), drawn over the candles by a companion
+ * primitive (`callouts`) so a candle never cuts through one; two that would overlap step apart.
  */
 export interface OiBarLevel {
   price: number;
@@ -40,6 +45,8 @@ export interface OiProfileBarsOptions {
   share?: number;
   /** What the bars measure: open interest, or delta x OI (then the heaviest strikes are called out). */
   unit?: "oi" | "delta";
+  /** Which side to draw: both, or one alone (it then sets the scale and the call-outs by itself). */
+  sides?: "both" | "call" | "put";
 }
 
 /** Delta x OI: a strike is heavy when it holds this share of its side's largest, the top few only. */
@@ -80,6 +87,33 @@ const FILL_ALPHA = 0.5;
 const STROKE_ALPHA = 0.8;
 /** Below this many device px per strike, a strike's call and put bars meet at the strike. */
 const ROOMY_STRIKE = 16;
+/** A call-out's box: the axis tags' height and side padding, CSS px, and its gap from its bar. */
+const CHIP_H = 16;
+const CHIP_PAD = 6;
+const CHIP_GAP = 6;
+
+/** A call-out, device px: its text, its box's right edge and centre line, its colour. */
+interface Chip {
+  text: string;
+  right: number;
+  y: number;
+  color: string;
+}
+
+/** Dark ink on a light fill, white on a dark one, as the axis tags choose. */
+function inkOn(color: string): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  const rgb = hex
+    ? [0, 2, 4].map((i) => parseInt(hex[1]!.slice(i, i + 2), 16))
+    : (/rgba?\(([^)]+)\)/.exec(color)?.[1] ?? "").split(/[ ,/]+/).slice(0, 3).map(Number);
+  if (rgb.length < 3 || rgb.some((v) => !Number.isFinite(v))) return "#ffffff";
+  const lin = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const lum = 0.2126 * lin(rgb[0]!) + 0.7152 * lin(rgb[1]!) + 0.0722 * lin(rgb[2]!);
+  return lum > 0.45 ? "#10131a" : "#ffffff";
+}
 
 /** The smallest step between two neighbouring strikes, or 0 for fewer than two. */
 function strikeStep(levels: readonly OiBarLevel[]): number {
@@ -120,6 +154,14 @@ export class OiProfileBars implements IPrimitive {
   private host: PrimitiveHost | null = null;
   private hits: Hit[] = [];
   private plotWidth = 0;
+  /** The call-outs the last `draw` placed, for `callouts` to paint over the candles. */
+  private chips: Chip[] = [];
+
+  /** The profile's figures, over the candles: add it to the same pane, after the bars. */
+  readonly callouts: IPrimitive = {
+    zOrder: () => "top",
+    draw: (ctx, rc) => this.drawChips(ctx, rc.dpr),
+  };
 
   constructor(opts: OiProfileBarsOptions) {
     this.opts = opts;
@@ -153,16 +195,17 @@ export class OiProfileBars implements IPrimitive {
   }
 
   draw(ctx: CanvasRenderingContext2D, rc: PrimitiveRenderContext): void {
-    const { levels, mode, callColor, putColor, share = DEFAULT_SHARE, unit = "oi" } = this.opts;
+    const { levels, mode, callColor, putColor, share = DEFAULT_SHARE, unit = "oi", sides = "both" } = this.opts;
+    const shown: Side[] = sides === "both" ? ["call", "put"] : [sides];
+    const calls = sides !== "put";
+    const puts = sides !== "call";
     this.hits = [];
+    this.chips = [];
     this.plotWidth = rc.plotWidth;
     if (levels.length === 0) return;
-    const max = this.largest(levels, mode);
-    if (max <= 0) return;
 
     const dpr = rc.dpr;
     const xEnd = Math.round(rc.plotWidth * dpr);
-    const scale = (rc.plotWidth * share * dpr) / max;
     // A strike's band is the height between it and the next: its call bar takes the upper half and
     // its put bar the lower, with a device pixel left clear between one strike's and the next's.
     // Zoomed out, the two halves meet at the strike rather than thin to a hairline.
@@ -171,8 +214,17 @@ export class OiProfileBars implements IPrimitive {
     const gap = stepPx >= ROOMY_STRIKE * dpr ? Math.max(1, Math.round(GAP * dpr)) : 0;
     const barH = Math.max(1, Math.min(Math.round(BAR_H * dpr), Math.floor((stepPx - 2 * gap - 1) / 2)));
     const bottom = rc.plotHeight * dpr + barH;
+    // Scaled to the largest strike on screen, not in the whole chain: a heavy strike far off the
+    // view left every bar in it a stub against the price axis.
+    const onScreen = levels.filter((level) => {
+      const y = rc.priceScale.priceToY(level.price) * dpr;
+      return Number.isFinite(y) && y >= -barH && y <= bottom;
+    });
+    const max = this.largest(onScreen, mode, shown);
+    if (max <= 0) return;
+    const scale = (rc.plotWidth * share * dpr) / max;
 
-    const heavy = unit === "delta" ? this.heaviest(levels) : null;
+    const heavy = unit === "delta" ? this.heaviest(levels, shown) : null;
     // The strikes that added the most today, for `both`'s labels: only among those on screen.
     let topCall: { level: OiBarLevel; y: number } | null = null;
     let topPut: { level: OiBarLevel; y: number } | null = null;
@@ -183,31 +235,37 @@ export class OiProfileBars implements IPrimitive {
       if (!Number.isFinite(y) || y < -barH || y > bottom) continue;
       const yCall = Math.round(y - gap - barH);
       const yPut = Math.round(y + gap);
-      const reach = Math.max(extent(level, "call", mode), extent(level, "put", mode));
+      const reach = Math.max(...shown.map((side) => extent(level, side, mode)));
       if (Number.isFinite(reach) && reach > 0) {
-        this.hits.push({ left: (xEnd - reach * scale) / dpr, top: yCall / dpr, bottom: (yPut + barH) / dpr, level });
+        this.hits.push({
+          left: (xEnd - reach * scale) / dpr,
+          // One side alone: the hit is that side's bar, not the pair's band.
+          top: (calls ? yCall : yPut) / dpr,
+          bottom: ((puts ? yPut : yCall) + barH) / dpr,
+          level,
+        });
       }
       if (mode === "both" && heavy) {
-        const hc = heavy.call.has(level.price);
-        const hp = heavy.put.has(level.price);
-        this.layered(ctx, xEnd, yCall, barH, scale, level, "call", callColor, hc ? HEAVY_ALPHA : DELTA_TOTAL_ALPHA);
-        this.layered(ctx, xEnd, yPut, barH, scale, level, "put", putColor, hp ? HEAVY_ALPHA : DELTA_TOTAL_ALPHA);
-        if (hc) this.heavyMark(ctx, xEnd, yCall, barH, scale, level, "call", callColor, callColor, putColor, dpr);
-        if (hp) this.heavyMark(ctx, xEnd, yPut, barH, scale, level, "put", putColor, callColor, putColor, dpr);
+        const hc = calls && heavy.call.has(level.price);
+        const hp = puts && heavy.put.has(level.price);
+        if (calls) this.layered(ctx, xEnd, yCall, barH, scale, level, "call", callColor, hc ? HEAVY_ALPHA : DELTA_TOTAL_ALPHA);
+        if (puts) this.layered(ctx, xEnd, yPut, barH, scale, level, "put", putColor, hp ? HEAVY_ALPHA : DELTA_TOTAL_ALPHA);
+        if (hc) this.heavyMark(ctx, xEnd, yCall, barH, scale, level, "call", callColor, dpr);
+        if (hp) this.heavyMark(ctx, xEnd, yPut, barH, scale, level, "put", putColor, dpr);
       } else if (mode === "both") {
-        this.layered(ctx, xEnd, yCall, barH, scale, level, "call", callColor);
-        this.layered(ctx, xEnd, yPut, barH, scale, level, "put", putColor);
-        if (level.callChange > 0 && (!topCall || level.callChange > topCall.level.callChange)) topCall = { level, y: yCall };
-        if (level.putChange > 0 && (!topPut || level.putChange > topPut.level.putChange)) topPut = { level, y: yPut };
+        if (calls) this.layered(ctx, xEnd, yCall, barH, scale, level, "call", callColor);
+        if (puts) this.layered(ctx, xEnd, yPut, barH, scale, level, "put", putColor);
+        if (calls && level.callChange > 0 && (!topCall || level.callChange > topCall.level.callChange)) topCall = { level, y: yCall };
+        if (puts && level.putChange > 0 && (!topPut || level.putChange > topPut.level.putChange)) topPut = { level, y: yPut };
       } else {
         const pick = mode === "oi" ? total : change;
-        this.bar(ctx, xEnd, yCall, barH, scale, pick(level, "call"), callColor);
-        this.bar(ctx, xEnd, yPut, barH, scale, pick(level, "put"), putColor);
+        if (calls) this.bar(ctx, xEnd, yCall, barH, scale, pick(level, "call"), callColor);
+        if (puts) this.bar(ctx, xEnd, yPut, barH, scale, pick(level, "put"), putColor);
       }
     }
 
-    if (topCall) this.label(ctx, xEnd, topCall.y, barH, scale, topCall.level, "call", callColor, dpr);
-    if (topPut) this.label(ctx, xEnd, topPut.y, barH, scale, topPut.level, "put", putColor, dpr);
+    if (topCall) this.label(xEnd, topCall.y, barH, scale, topCall.level, "call", callColor, dpr);
+    if (topPut) this.label(xEnd, topPut.y, barH, scale, topPut.level, "put", putColor, dpr);
     ctx.restore();
   }
 
@@ -219,8 +277,9 @@ export class OiProfileBars implements IPrimitive {
    * heavy at HEAVY_SHARE of its side's largest and in the top few; once heavy it stays so until it
    * drops under HEAVY_KEEP, or out of the top few more, so a figure wobbling at the line holds still.
    */
-  private heaviest(levels: readonly OiBarLevel[]): { call: Set<number>; put: Set<number> } {
+  private heaviest(levels: readonly OiBarLevel[], shown: readonly Side[]): { call: Set<number>; put: Set<number> } {
     const pick = (side: Side) => {
+      if (!shown.includes(side)) return new Set<number>();
       const ranked = levels
         .map((l) => ({ price: l.price, v: total(l, side) }))
         .filter((x) => Number.isFinite(x.v) && x.v > 0)
@@ -240,7 +299,7 @@ export class OiProfileBars implements IPrimitive {
   }
 
   /** A heavy strike: its bar outlined, and beside it an arrow (adding or reducing), its exposure and the move. */
-  private heavyMark(ctx: CanvasRenderingContext2D, xEnd: number, y: number, h: number, scale: number, level: OiBarLevel, side: Side, color: string, upColor: string, downColor: string, dpr: number): void {
+  private heavyMark(ctx: CanvasRenderingContext2D, xEnd: number, y: number, h: number, scale: number, level: OiBarLevel, side: Side, color: string, dpr: number): void {
     const t = total(level, side);
     const len = Math.round(t * scale);
     if (!Number.isFinite(t) || len <= 0) return;
@@ -251,25 +310,15 @@ export class OiProfileBars implements IPrimitive {
     ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, len - 1), Math.max(0, h - 1));
     const c = change(level, side);
     const dir = Number.isFinite(c) ? Math.sign(c) : 0;
-    ctx.font = `${Math.round(LABEL_FONT * dpr)}px ${CHART_FONT_FAMILY}`;
-    ctx.textAlign = "right";
-    ctx.textBaseline = "middle";
-    const text = `${compact(t)}${dir !== 0 ? `  ${dir > 0 ? "+" : "−"}${compact(c)}` : ""}`;
-    const tx = x - Math.round(6 * dpr);
-    ctx.fillStyle = color;
-    ctx.fillText(text, tx, y + h / 2);
-    if (dir !== 0) {
-      // The arrow ahead of the figures: green while exposure is being added, red while it is shed.
-      const w = ctx.measureText(text).width;
-      ctx.fillStyle = dir > 0 ? upColor : downColor;
-      ctx.fillText(dir > 0 ? "▲" : "▼", tx - w - Math.round(5 * dpr), y + h / 2);
-    }
+    // The arrow says which way exposure moved (added or shed), the figures how much.
+    const text = `${dir > 0 ? "▲ " : dir < 0 ? "▼ " : ""}${compact(t)}${dir !== 0 ? `  ${dir > 0 ? "+" : "−"}${compact(c)}` : ""}`;
+    this.chips.push({ text, right: x - Math.round(CHIP_GAP * dpr), y: y + h / 2, color });
   }
 
-  private largest(levels: readonly OiBarLevel[], mode: OiBarsMode): number {
+  private largest(levels: readonly OiBarLevel[], mode: OiBarsMode, shown: readonly Side[]): number {
     let max = 0;
     for (const level of levels) {
-      for (const side of ["call", "put"] as const) {
+      for (const side of shown) {
         const v = extent(level, side, mode);
         if (Number.isFinite(v) && v > max) max = v;
       }
@@ -325,14 +374,42 @@ export class OiProfileBars implements IPrimitive {
     }
   }
 
-  /** "Call OI added +48,230" to the left of the bar. */
-  private label(ctx: CanvasRenderingContext2D, xEnd: number, y: number, h: number, scale: number, level: OiBarLevel, side: Side, color: string, dpr: number): void {
+  /** "Call OI +48,230", a call-out to the left of the bar. */
+  private label(xEnd: number, y: number, h: number, scale: number, level: OiBarLevel, side: Side, color: string, dpr: number): void {
     const len = Math.round(total(level, side) * scale);
     const added = change(level, side);
+    this.chips.push({ text: `${side === "call" ? "Call" : "Put"} OI +${fmt0(added)}`, right: xEnd - len - Math.round(CHIP_GAP * dpr), y: y + h / 2, color });
+  }
+
+  /**
+   * The call-outs, over the candles: each a box of its bar's colour with its figures in the ink
+   * that reads on it, kept inside the plot, and stepped down clear of one above it that it would
+   * cover, as the axis spreads its tags.
+   */
+  private drawChips(ctx: CanvasRenderingContext2D, dpr: number): void {
+    if (this.chips.length === 0) return;
+    const h = Math.round(CHIP_H * dpr);
+    const pad = Math.round(CHIP_PAD * dpr);
+    ctx.save();
     ctx.font = `${Math.round(LABEL_FONT * dpr)}px ${CHART_FONT_FAMILY}`;
-    ctx.textAlign = "right";
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = color;
-    ctx.fillText(`${side === "call" ? "Call" : "Put"} OI added +${fmt0(added)}`, xEnd - len - Math.round(6 * dpr), y + h / 2);
+    const placed: { left: number; right: number; top: number }[] = [];
+    for (const chip of [...this.chips].sort((a, b) => a.y - b.y)) {
+      const w = Math.ceil(ctx.measureText(chip.text).width) + 2 * pad;
+      const left = Math.max(Math.round(4 * dpr), chip.right - w);
+      let top = Math.round(chip.y - h / 2);
+      for (const p of placed) {
+        if (left < p.right && left + w > p.left && top < p.top + h + 1 && top + h + 1 > p.top) top = p.top + h + 1;
+      }
+      placed.push({ left, right: left + w, top });
+      ctx.fillStyle = chip.color;
+      ctx.beginPath();
+      ctx.roundRect(left, top, w, h, h / 8);
+      ctx.fill();
+      ctx.fillStyle = inkOn(chip.color);
+      ctx.fillText(chip.text, left + pad, top + h / 2);
+    }
+    ctx.restore();
   }
 }

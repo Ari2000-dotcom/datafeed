@@ -175,7 +175,8 @@
    of every straddle on the chart, with a count of the added ones before its chevron. */
 .mh-straddle-box {
   flex: none;
-  height: 27px;
+  /* The toolbar's one control height. */
+  height: 30px;
   padding-right: 7px;
   border: 0;
   font: inherit;
@@ -189,9 +190,6 @@
 .mh-straddle-box:focus-visible {
   outline: 2px solid var(--mh-focus);
   outline-offset: 1px;
-}
-.mh-straddle-box > .mh-chip-move {
-  margin-left: -4px;
 }
 .mh-straddle-box-count {
   padding: 0 5px;

@@ -69,7 +69,7 @@ export function ChainPanel({
   const colourOf = useMemo(() => new Map(picks.map((p) => [p.strike, p.colour])), [picks]);
   const toggle = useCallback((strike: number) => togglePick(id, expiry, strike), [id, expiry]);
   // The straddle a live chart of this pair is drawing. The hub keeps the cheapest straddle within
-  // two strikes of the money, which is not always the strike nearest spot (the underlined one); with
+  // two strikes of the money, which is not always the strike nearest spot (the one in a chip); with
   // no live chart open on the pair, the nearest strike stands in.
   const summaries = useSummaries();
   const onChart = summaries.find((s) => s.key === `${id}|${expiry}`)?.last.strike ?? chain.atm;
@@ -168,14 +168,14 @@ export function ChainPanel({
               </colgroup>
               <thead>
                 <tr>
-                  {narrow ? null : <th className="mh-th-ce">Call IV</th>}
+                  {narrow ? null : <th className="mh-th-ce mh-th-iv">Call IV</th>}
                   {/* Without the IV columns a leg has one number, so its name is enough. */}
                   <th className="mh-th-ce">{narrow ? "Call" : "Call LTP"}</th>
                   <th>Strike</th>
                   <th className="mh-th-ce">Straddle</th>
                   <th />
                   <th className="mh-th-pe">{narrow ? "Put" : "Put LTP"}</th>
-                  {narrow ? null : <th className="mh-th-pe">Put IV</th>}
+                  {narrow ? null : <th className="mh-th-pe mh-th-iv">Put IV</th>}
                 </tr>
               </thead>
               <tbody>
@@ -265,7 +265,7 @@ const Row = memo(function Row({
   onToggle,
 }: Readonly<{
   row: ChainRow;
-  /** The strike nearest spot: underlined, and the row the chain opens centred on. */
+  /** The strike nearest spot: lifted with its strike in a chip, and the row the chain opens centred on. */
   atm: boolean;
   /** The chart's own ATM straddle: on the chart already, so it cannot be added or removed here. */
   held: boolean;
@@ -292,7 +292,9 @@ const Row = memo(function Row({
       <td className={ceItm ? "mh-ce mh-itm" : "mh-ce"}>
         <span className={ce === undefined ? "mh-none" : "mh-ltp"}>{money(ce)}</span>
       </td>
-      <td className="mh-strike">{row.strike.toLocaleString("en-IN")}</td>
+      <td className="mh-strike">
+        <b>{row.strike.toLocaleString("en-IN")}</b>
+      </td>
       <td className="mh-straddle">
         <i style={{ background: on ? colour : "transparent" }} />
         <span className={straddle === null ? "mh-none" : on ? "mh-on" : undefined}>{straddle === null ? "—" : fmt2(straddle)}</span>

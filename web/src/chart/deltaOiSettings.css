@@ -1,0 +1,117 @@
+/*
+ * The scrip chart's Δ × OI settings (chart/DeltaOiSettings.tsx): a menu panel (ui/Popover) with one
+ * labelled segmented control a row. The choice in use is a lighter plate in the strongest ink, as the
+ * container bar's menus draw theirs (shell/containerBar.css), so a pick reads the same wherever it is made.
+ */
+
+.mh-set {
+  width: 320px;
+  padding: 10px 12px 12px;
+}
+
+.mh-set-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  margin-bottom: 8px;
+  color: var(--mh-text-strong);
+  font-size: var(--mh-size-control);
+}
+.mh-set-reset {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--mh-radius-small);
+  background: transparent;
+  color: var(--mh-text-tertiary);
+  font-size: var(--mh-size-caption);
+  cursor: pointer;
+  transition:
+    background-color var(--mh-dur-fast) var(--mh-ease),
+    color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-set-reset:hover:not(:disabled) {
+  background: var(--mh-surface-2);
+  color: var(--mh-text-strong);
+}
+.mh-set-reset:disabled {
+  color: var(--mh-text-disabled);
+  cursor: default;
+}
+
+.mh-set-row + .mh-set-row {
+  margin-top: 12px;
+}
+.mh-set-label {
+  margin-bottom: 6px;
+  color: var(--mh-text-tertiary);
+  font-size: var(--mh-size-caption);
+}
+.mh-set-hint {
+  margin-top: 6px;
+  color: var(--mh-text-tertiary);
+  font-size: var(--mh-size-micro);
+  line-height: 1.4;
+}
+
+.mh-set-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--mh-radius-small);
+  background: var(--mh-surface-2);
+}
+.mh-set-seg-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: calc(var(--mh-radius-small) - 1px);
+  background: transparent;
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-caption);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--mh-dur-fast) var(--mh-ease),
+    color var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-set-seg-btn:hover:not(:disabled, [aria-pressed="true"]) {
+  color: var(--mh-text-strong);
+}
+/* The pick: a lighter plate in the strongest ink, as the container bar's menus and every pick-one row show it. */
+.mh-set-seg-btn[aria-pressed="true"] {
+  background: var(--mh-surface-3);
+  color: var(--mh-text-strong);
+}
+.mh-set-seg-btn:focus-visible {
+  outline: 1px solid var(--mh-text-tertiary);
+  outline-offset: 1px;
+}
+.mh-set-seg-btn:disabled {
+  color: var(--mh-text-disabled);
+  cursor: default;
+}
+.mh-set-seg-btn:disabled[aria-pressed="true"] {
+  background: var(--mh-surface-3);
+  color: var(--mh-text-tertiary);
+}
+
+/* The trigger says when the view is not the default one: a dot, amber when a past session is up. */
+.mh-set-trigger {
+  position: relative;
+}
+.mh-set-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mh-accent);
+}
+.mh-set-dot[data-tone="warn"] {
+  background: var(--mh-amber);
+}

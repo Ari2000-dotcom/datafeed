@@ -1,0 +1,96 @@
+/*
+ * The drop map (shell/DropMap.tsx): every cell outlined and its drop slots, while a container is
+ * dragged. QuantDesk's, on this desk's tokens: the dock accent for the dashes and the area a slot
+ * would take, the chart's ground for a slot until the pointer is on it.
+ */
+
+.mh-drop-map {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+.mh-drop-map > div {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.mh-drop-box {
+  border: 1px dashed color-mix(in srgb, var(--mh-dock-accent) 85%, transparent);
+  border-radius: var(--mh-radius-small);
+}
+
+/* What letting go on the slot under the pointer would take, with a caption that says so. */
+.mh-drop-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--mh-dock-accent);
+  border-radius: var(--mh-radius-small);
+  background: color-mix(in srgb, var(--mh-dock-accent) 14%, transparent);
+  transition:
+    left var(--mh-dur-fast) var(--mh-ease-out),
+    top var(--mh-dur-fast) var(--mh-ease-out),
+    width var(--mh-dur-fast) var(--mh-ease-out),
+    height var(--mh-dur-fast) var(--mh-ease-out);
+}
+.mh-drop-area > span {
+  padding: 2px 8px;
+  border-radius: var(--mh-radius-small);
+  background: var(--mh-dock-accent);
+  color: var(--mh-bg);
+  font-size: var(--mh-size-caption);
+  font-weight: var(--mh-weight-emphasis);
+  white-space: nowrap;
+}
+
+.mh-drop-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  border: 1px dashed color-mix(in srgb, var(--mh-dock-accent) 85%, transparent);
+  border-radius: var(--mh-radius-small);
+  background: var(--mh-bg);
+  color: var(--mh-dock-accent);
+  user-select: none;
+  transition:
+    background-color var(--mh-dur-fast) ease-out,
+    color var(--mh-dur-fast) ease-out;
+}
+.mh-drop-slot > svg {
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+.mh-drop-slot.hot {
+  border-style: solid;
+  background: var(--mh-dock-accent);
+  color: var(--mh-bg);
+}
+
+/*
+ * Dragging a cell: the one it is leaving fades, so it is clear which is moving, and the drag image
+ * of a side panel's header is a small chip naming it, the shape of a tab.
+ */
+.mh-dock .dv-groupview.mh-drag-source > .dv-content-container {
+  opacity: 0.45;
+  transition: opacity var(--mh-dur-fast) var(--mh-ease);
+}
+.mh-drag-ghost {
+  position: fixed;
+  top: -1000px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  height: var(--mh-dock-tab-h);
+  padding: 0 10px;
+  border: 1px solid var(--mh-dock-accent);
+  border-radius: var(--mh-radius-small);
+  background: var(--mh-bg);
+  color: var(--mh-text-strong);
+  font-family: inherit;
+  font-size: var(--mh-size-caption);
+  white-space: nowrap;
+  pointer-events: none;
+}

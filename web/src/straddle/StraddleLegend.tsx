@@ -2,7 +2,8 @@ import { useState } from "react";
 
 import type { Bar } from "../hub/types";
 import { fmt0, fmt2 } from "../core/format";
-import { lineOf, setFocus, toggleLine, type LineId } from "./StraddleChart";
+import { useFitRow } from "../ui/fitRow";
+import { lineOf, percentMove, readingOf, setFocus, toggleLine, type LineId, type Move } from "./StraddleChart";
 import "./legend.css";
 
 /** A picked strike's line, as the legend reads it at the minute shown. */
@@ -13,7 +14,9 @@ export interface LegendPick {
   first: number | null;
 }
 
-const COLLAPSED_KEY = "mh.legend.collapsed";
+// A new key (was "mh.legend.collapsed") so every legend opens unfolded once: one left folded
+// earlier read as a past day with no spot, VWAP or synthetic future at all.
+const COLLAPSED_KEY = "mh.legend.folded";
 
 function loadCollapsed(): boolean {
   try {
@@ -24,11 +27,31 @@ function loadCollapsed(): boolean {
 }
 
 /**
- * The chart's status line, TradingView's way, on the price pane's top-left: the instrument on the
- * first row (name · interval · exchange · ATM strike) with that minute's readings after it, then a
- * row per line on the pane, each in its own colour, and under them the arrow that folds those
- * rows away. Every number is the minute under the crosshair, else the latest. A row's controls
- * (show or hide, remove) appear while the pointer is on it.
+ * The figures a straddle desk reads first, in the order it reads them, each against its label and
+ * in its line's colour: the underlying (MCX: the future its options are written on), the synthetic
+ * future, the straddle's VWAP (its average price this session) and the ATM IV. `drop` is the rank
+ * at which a figure gives way on a plot too slim for the whole line (ui/fitRow.ts); VWAP never does.
+ */
+const FIGURES: readonly { id: LineId; label: string; title: string; drop?: number }[] = [
+  { id: "spot", label: "Spot", title: "The underlying's spot", drop: 5 },
+  { id: "fut", label: "Syn fut", title: "Synthetic future: call − put + strike", drop: 4 },
+  { id: "vwap", label: "VWAP", title: "The straddle's average price this session (VWAP)" },
+  { id: "iv", label: "IV", title: "ATM implied volatility, its move in vol points", drop: 3 },
+];
+
+/**
+ * The chart's status line, on the price pane's top-left. Its first row is the figures, not the
+ * instrument's name (the toolbar names the active chart): the market's mark, then spot, the
+ * synthetic future, VWAP and IV, each with its move since the session's open, then the ATM legs and
+ * the straddle itself. A click on a figure shows or hides its line; pointing at one puts its line
+ * forward. On a slim plot the least needed give way first: the legs, then the moves, then IV, the
+ * synthetic future and spot; VWAP and the straddle stay. Under it, a row per straddle added from
+ * the chain, and the arrow that folds those away. Every number is the minute under the crosshair,
+ * else the latest.
+ *
+ * With the data table on the chart (`withTable`), the line does not say twice what the table says:
+ * each figure's move and the legs give way to it, and the line keeps each value and the straddle's
+ * own move.
  */
 export function StraddleLegend({
   name,
@@ -39,14 +62,20 @@ export function StraddleLegend({
   picks,
   onRemovePick,
   trading,
+  closedOn,
   mcx,
+  withTable = false,
 }: Readonly<{
   name: string;
   exchange: string;
   /** Live minutes arriving now, or a closed market / a past session. */
   trading: boolean;
+  /** Today asked for with nothing traded yet: the session shown in its place ("Fri, 30 Oct"), for the status mark's tooltip. */
+  closedOn?: string;
   /** MCX has no spot: its "spot" line is the future its options are written on, and says so. */
   mcx: boolean;
+  /** The data table is on the chart: its moves and legs are not repeated here. */
+  withTable?: boolean;
   shown: Bar | undefined;
   /** The open of the session `shown` is in: what each move is measured from. */
   open: Bar | undefined;
@@ -65,62 +94,64 @@ export function StraddleLegend({
       return !was;
     });
   };
-  const rows = 3 + picks.length;
+  const straddle = readingOf("straddle", shown, open);
+  const fitFigures = useFitRow();
+  const atm = shown ? `ATM ${fmt0(shown.strike)}${shown.rolled ? " (rolled)" : ""}` : "";
 
   return (
     <div className="mh-legend">
-      <div className="mh-legend-row mh-legend-main" onPointerEnter={() => setFocus("straddle")} onPointerLeave={() => setFocus(null)}>
-        <span className="mh-legend-titles">
-          <span className="mh-legend-title mh-legend-name">{name}</span>
-          <span className="mh-legend-title mh-legend-dot mh-legend-meta">1</span>
-          <span className="mh-legend-title mh-legend-dot mh-legend-meta">{exchange}</span>
-          {shown ? (
-            <span className="mh-legend-title mh-legend-dot">
-              ATM {fmt0(shown.strike)}
-              {shown.rolled ? " (rolled)" : ""}
-            </span>
-          ) : null}
-        </span>
-        <span className="mh-legend-status" title={trading ? "Market open" : "Market closed"}>
+      <div className="mh-legend-row mh-legend-main" aria-label={`${name} · ${exchange}${atm ? ` · ${atm}` : ""}`} onPointerEnter={() => setFocus("straddle")} onPointerLeave={() => setFocus(null)}>
+        {/* The market's state, TradingView's way: this mark alone, on every chart; its tooltip names
+            the session shown while today has nothing traded yet. */}
+        <span className="mh-legend-status" title={trading ? "Market open" : closedOn ? `Market closed · showing ${closedOn}` : "Market closed"}>
           <span className={trading ? "mh-legend-status-item mh-open" : "mh-legend-status-item"} aria-hidden />
         </span>
         {shown ? (
-          // TradingView's readout: each label against its number, every number in the one colour of
-          // the straddle's move since the open.
-          <span className={`mh-legend-values mh-legend-readout ${toneOf(shown.straddle, open?.straddle)}`}>
-            <Value label="CE" text={fmt2(shown.call)} />
-            <Value label="PE" text={fmt2(shown.put)} />
-            <Value label="S" text={fmt2(shown.straddle)} />
-            <Change value={shown.straddle} from={open?.straddle} toned={false} />
+          <span className="mh-legend-values mh-legend-figures" ref={fitFigures}>
+            {FIGURES.map(({ id, label, title, drop }) => {
+              const line = lineOf(id);
+              const said = id === "spot" && mcx ? "Fut" : label;
+              const r = readingOf(id, shown, open);
+              const off = hidden.has(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className="mh-legend-figure"
+                  data-drop={drop}
+                  data-off={off || undefined}
+                  aria-pressed={!off}
+                  title={`${id === "spot" && mcx ? "The future the options are written on" : title} · click to ${off ? "show" : "hide"} its line`}
+                  onPointerEnter={() => setFocus(id)}
+                  onPointerLeave={() => setFocus("straddle")}
+                  onClick={() => toggleLine(id)}
+                >
+                  <span className="mh-legend-label">{said}</span>
+                  <span className="mh-legend-number" style={off ? undefined : { color: `var(${line.colour})` }}>
+                    {r.value}
+                  </span>
+                  {r.move && !withTable ? (
+                    <span className={`mh-legend-move ${off ? "" : toneOf(r.move)}`} data-drop={2}>
+                      ({r.move.text})
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+            {/* The ATM legs and the straddle, every number in the colour of the straddle's move. */}
+            {withTable ? null : (
+              <span className={`mh-legend-readout mh-legend-legs ${toneOf(straddle.move)}`} data-drop={1} title={atm}>
+                <Value label="CE" text={fmt2(shown.call)} />
+                <Value label="PE" text={fmt2(shown.put)} />
+              </span>
+            )}
+            <span className={`mh-legend-readout mh-legend-straddle ${toneOf(straddle.move)}`} title={`The ${atm} straddle: call + put`}>
+              <Value label="S" text={straddle.value} />
+              <Moved move={straddle.move} toned={false} />
+            </span>
           </span>
         ) : null}
       </div>
-
-      {collapsed
-        ? null
-        : (["vwap", "spot", "fut"] as const).map((id) => {
-            const line = lineOf(id);
-            const label = mcx && id === "spot" ? "Fut" : line.label;
-            const v = shown ? line.value(shown) : null;
-            const from = open ? line.value(open) : null;
-            const off = hidden.has(id);
-            return (
-              <div key={id} className="mh-legend-row" data-hidden={off || undefined} onPointerEnter={() => setFocus(id)} onPointerLeave={() => setFocus(null)}>
-                <span className="mh-legend-titles">
-                  <span className="mh-legend-title">{label}</span>
-                </span>
-                <span className="mh-legend-values">
-                  <Value text={v !== null && Number.isFinite(v) ? line.format(v) : "—"} colour={`var(${line.colour})`} />
-                  {id === "vwap" ? null : <Change value={v} from={from} />}
-                </span>
-                <span className="mh-legend-buttons">
-                  <button type="button" className="mh-legend-button" aria-label={off ? `Show ${label}` : `Hide ${label}`} title={off ? "Show" : "Hide"} onClick={() => toggleLine(id)}>
-                    <EyeGlyph crossed={off} />
-                  </button>
-                </span>
-              </div>
-            );
-          })}
 
       {collapsed
         ? null
@@ -131,7 +162,7 @@ export function StraddleLegend({
               </span>
               <span className="mh-legend-values">
                 <Value text={p.value !== null ? fmt2(p.value) : "—"} colour={p.colour} />
-                <Change value={p.value} from={p.first} />
+                <Moved move={p.value !== null && p.first !== null && p.value !== p.first ? percentMove(p.value, p.first) : null} />
               </span>
               <span className="mh-legend-buttons">
                 <button type="button" className="mh-legend-button" aria-label={`Remove the ${p.strike} straddle`} title="Remove" onClick={() => onRemovePick(p.strike)}>
@@ -141,17 +172,20 @@ export function StraddleLegend({
             </div>
           ))}
 
-      <button
-        type="button"
-        className="mh-legend-toggler"
-        aria-expanded={!collapsed}
-        aria-label={collapsed ? "Show the line legend" : "Hide the line legend"}
-        title={collapsed ? "Show the line legend" : "Hide the line legend"}
-        onClick={toggleCollapsed}
-      >
-        <ChevronGlyph />
-        {collapsed ? <span className="mh-legend-count">{rows}</span> : null}
-      </button>
+      {/* The fold, only while there are straddles added to fold away. */}
+      {picks.length > 0 ? (
+        <button
+          type="button"
+          className="mh-legend-toggler"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Show the added straddles" : "Hide the added straddles"}
+          title={collapsed ? "Show the added straddles" : "Hide the added straddles"}
+          onClick={toggleCollapsed}
+        >
+          <ChevronGlyph />
+          {collapsed ? <span className="mh-legend-count">{picks.length}</span> : null}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -166,24 +200,19 @@ export function Value({ label, text, colour }: Readonly<{ label?: string; text: 
   );
 }
 
-/** Green for a rise since the open, red for a fall, nothing for no move or no open. */
-export function toneOf(value: number | null | undefined, from: number | null | undefined): string {
-  if (value == null || from == null || !Number.isFinite(value) || !Number.isFinite(from)) return "";
-  return value > from ? "mh-up" : value < from ? "mh-down" : "";
+/** Green for a rise since the open, red for a fall, nothing for no move (rounded to 0.00) or none yet. */
+export function toneOf(move: Move | null): string {
+  return move === null ? "" : move.dir > 0 ? "mh-up" : move.dir < 0 ? "mh-down" : "";
 }
 
-/** The move since the session's open, TradingView's way: points, then percent, in the move's colour. */
-export function Change({ value, from, toned = true }: Readonly<{ value: number | null | undefined; from: number | null | undefined; toned?: boolean }>) {
-  if (value == null || from == null || !Number.isFinite(value) || !Number.isFinite(from) || from === 0) return null;
-  const d = value - from;
-  const sign = d > 0 ? "+" : d < 0 ? "−" : "";
-  return (
-    <span className={toned ? `mh-legend-value ${toneOf(value, from)}` : "mh-legend-value"}>
-      {sign}
-      {fmt2(Math.abs(d))} ({sign}
-      {((Math.abs(d) / Math.abs(from)) * 100).toFixed(2)}%)
-    </span>
-  );
+/**
+ * A move since the session's open as the old chips row read it (`readingOf`, `percentMove`): a
+ * percent ("+2.10%", IV in vol points), rounded before its sign is chosen so nothing reads
+ * "−0.00%", and nothing at all on the opening minute itself. In the move's colour.
+ */
+export function Moved({ move, toned = true }: Readonly<{ move: Move | null; toned?: boolean }>) {
+  if (move === null) return null;
+  return <span className={toned ? `mh-legend-value ${toneOf(move)}` : "mh-legend-value"}>({move.text})</span>;
 }
 
 /*

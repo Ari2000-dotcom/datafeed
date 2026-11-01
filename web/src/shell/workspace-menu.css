@@ -1,43 +1,24 @@
-/* The Workspace tab and its menu of saved workspaces (shell/WorkspaceMenu.tsx). Neutral tones and
-   the same hover wash as the app's other menus; the interaction blue is only the focus edge. */
+/* The toolbar's Layouts menu of saved layouts (shell/WorkspaceMenu.tsx). Neutral tones and the
+   same hover wash as the app's other menus; the interaction blue is only the focus edge. */
 
 .mh-wsnav {
   position: relative;
   display: flex;
-  align-items: stretch;
+  align-items: center;
 }
-.mh-nav-icon {
-  gap: 7px;
-  padding-right: 6px;
-}
-.mh-nav-caret {
-  display: inline-grid;
-  place-items: center;
-  position: relative;
-  z-index: 1;
-  width: 18px;
-  margin: 9px 8px 9px 0;
-  padding: 0;
-  border: 0;
-  border-radius: var(--mh-radius-small);
-  background: transparent;
-  color: var(--mh-text-tertiary);
-  cursor: pointer;
-  transition:
-    background-color var(--mh-dur-fast) var(--mh-ease),
-    color var(--mh-dur-fast) var(--mh-ease);
-}
-.mh-nav-caret:hover,
-.mh-nav-caret[aria-expanded="true"] {
-  background: var(--mh-surface-1);
-  color: var(--mh-text-strong);
+/* The layout's name on the toolbar, cut short rather than pushing the controls before it. */
+.mh-layouts-trigger .mh-picker-value {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Opens from the toolbar's right end: it hangs to the left, inside the window. */
 .mh-ws {
-  position: absolute;
+  position: fixed;
   z-index: 40;
-  top: calc(100% + 1px);
-  left: 0;
+  top: calc(var(--mh-appbar-h) + var(--mh-gap) + var(--mh-toolbar-h) + 4px);
+  right: 8px;
   width: 320px;
   padding: 8px;
   border: 1px solid var(--mh-line-strong);

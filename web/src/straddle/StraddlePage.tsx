@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { dayLabel, fmt0, fmt2, istDate, nearestExpiry, pastWeekdays } from "../core/format";
+import { dayLabel, expiryDate as shortDate, expiryDays as daysTo, fmt2, istDate, nearestExpiry, pastWeekdays } from "../core/format";
 import type { Hub } from "../hub/client";
 import type { Bar, StraddleSnapshot, StraddleUpdate, TopicMessage, Underlying } from "../hub/types";
 import { Dropdown } from "../ui/Dropdown";
 import { MultiDropdown } from "../ui/MultiDropdown";
-import { useFitRow } from "../ui/fitRow";
 import { AlertIcon, ChartIcon, IndicatorsIcon, Spinner } from "../ui/icons";
 import { lineOf, openOf, sessionOpens, StraddleChart, toggleLine, useHidden, type HistoryStatus, type LineId } from "./StraddleChart";
 import { StraddleLegend } from "./StraddleLegend";
 import { StraddleBox } from "./StraddleBox";
+import { StraddleTable, toggleTable, useTableShown } from "./StraddleTable";
 import { ATM_COLOUR, MAX_STRADDLES } from "../desk/compare";
 import "./chips.css";
 import { picksFor, togglePick, useCompare } from "../desk/compare";
@@ -134,6 +134,19 @@ export function StraddlePage({
     }
     onPickRef.current?.(pick);
   }, [pick]);
+
+  // Made the active chart of a layout: its pick becomes the last one again, so the side panel's
+  // chain and Delta × OI move to it.
+  useEffect(() => {
+    if (!inFront || !pick) return;
+    try {
+      localStorage.setItem(LAST_PICK, JSON.stringify(pick));
+      window.dispatchEvent(new Event(PICK_EVENT));
+    } catch {
+      // Not remembering the last pick is fine.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inFront]);
 
   const choose = (u: Underlying) => {
     setPick({ underlying: u, expiry: nearestExpiry(u.expiries), day: "live" });
@@ -385,6 +398,7 @@ export function StraddlePage({
   const picks = pick ? picksFor(compare, pick.underlying.id, pick.expiry) : [];
   const strikeLines = useStrikeLines(hub, pick?.underlying.id ?? "", pick?.expiry ?? "", closedDay || (pick?.day ?? "live"), bars, picks);
   const hiddenLines = useHidden();
+  const tableShown = useTableShown();
   const last = bars[bars.length - 1];
   // The legend reads its lines at the minute under the chart's crosshair, else the latest one,
   // each with its move since that minute's session opened.
@@ -393,10 +407,7 @@ export function StraddlePage({
   const opens = useMemo(() => sessionOpens(chartBars), [chartBars]);
   const shown = (hoverTime !== null ? byTime.get(hoverTime) : undefined) ?? last;
   const shownOpen = openOf(opens, shown);
-  const first = bars[0];
   const mcx = pick?.underlying.id.startsWith("mcx:") ?? false;
-  // The strip's readouts stay on one line: measured, the least needed pieces give way first.
-  const fitStrip = useFitRow();
   const legendPicks = picks.map((p) => {
     const line = strikeLines.find((l) => l.strike === p.strike);
     return { strike: p.strike, colour: p.colour, value: hoverTime !== null ? line?.byTime.get(hoverTime) ?? null : line?.last ?? null, first: line?.first ?? null };
@@ -413,8 +424,6 @@ export function StraddlePage({
       <Spinner size={13} />
       Loading {pick ? dayLabel(pick.day) : ""}
     </span>
-  ) : closedDay ? (
-    <span className="mh-hint">Market closed · {dayLabel(closedDay)}</span>
   ) : note ? (
     <span className="mh-hint mh-warn">
       {note.endsWith("…") ? <Spinner size={13} /> : <AlertIcon size={14} />}
@@ -452,6 +461,8 @@ export function StraddlePage({
 
           {pick && (
             <>
+              {/* What is drawn, after whose: the expiry and the session, TradingView's interval slot. */}
+              <span className="mh-tv-sep" aria-hidden />
               <Dropdown
                 label="Expiry"
                 caption={false}
@@ -472,8 +483,19 @@ export function StraddlePage({
                 value={pick.day}
                 onChange={(day) => setPick({ ...pick, day })}
                 tone={live ? undefined : "warn"}
-                lead={live ? <span className="mh-dot mh-ok" aria-hidden /> : null}
-                renderValue={(o) => (o?.value === "live" ? "Today" : o ? dayLabel(o.value) : null)}
+                // Today with nothing traded yet says so here, once, on the active chart: a grey dot and
+                // "closed" in place of the green live one (the legend's mark and the time axis carry the
+                // session shown).
+                lead={live ? <span className={closedDay ? "mh-dot" : "mh-dot mh-ok"} aria-hidden /> : null}
+                renderValue={(o) =>
+                  o?.value === "live" ? (
+                    <>
+                      Today{closedDay ? <span className="mh-picker-aside">closed</span> : null}
+                    </>
+                  ) : o ? (
+                    dayLabel(o.value)
+                  ) : null
+                }
                 options={sessions.map((d) => (d === "live" ? { value: d, label: "Today", note: "Live" } : { value: d, label: dayLabel(d) }))}
               />
             </>
@@ -482,24 +504,21 @@ export function StraddlePage({
           {pick ? (
             <>
               <span className="mh-tv-sep" aria-hidden />
-              {/* TradingView's Indicators button: the chart's lines, each switched on or off. */}
-              <span className="mh-tv-bare">
-                <MultiDropdown
-                  label="Indicators"
-                  caption={false}
-                  search={false}
-                  value={indicatorIds.filter((id) => !hiddenLines.has(id))}
-                  onChange={(next) => {
-                    for (const id of indicatorIds) if (next.includes(id) === hiddenLines.has(id)) toggleLine(id);
-                  }}
-                  renderValue={() => (
-                    <span className="mh-ind-trigger">
-                      <IndicatorsIcon size={16} /> Indicators
-                    </span>
-                  )}
-                  options={indicatorIds.map((id) => ({ value: id, label: lineOf(id).label, note: INDICATOR_NOTES[id] }))}
-                />
-              </span>
+              {/* TradingView's Indicators button, just its fx: the chart's lines, each switched on or off. */}
+              <MultiDropdown<LineId | "table">
+                label="Indicators"
+                icon={<IndicatorsIcon />}
+                search={false}
+                value={[...indicatorIds.filter((id) => !hiddenLines.has(id)), ...(tableShown ? (["table"] as const) : [])]}
+                onChange={(next) => {
+                  for (const id of indicatorIds) if (next.includes(id) === hiddenLines.has(id)) toggleLine(id);
+                  if (next.includes("table") !== tableShown) toggleTable();
+                }}
+                options={[
+                  ...indicatorIds.map((id) => ({ value: id, label: lineOf(id).label, note: INDICATOR_NOTES[id] })),
+                  { value: "table" as const, label: "Data table", note: "Spot, syn fut, basis, CE, PE" },
+                ]}
+              />
             </>
           ) : null}
 
@@ -508,6 +527,7 @@ export function StraddlePage({
             <StraddleBox
               colour={ATM_COLOUR}
               strike={shown?.strike ?? null}
+              rolled={shown?.rolled ?? false}
               value={shown?.straddle ?? null}
               first={shownOpen?.straddle ?? null}
               picks={legendPicks}
@@ -515,51 +535,15 @@ export function StraddlePage({
               onRemove={(strike) => togglePick(pick.underlying.id, pick.expiry, strike)}
             />
           ) : null}
-          <span className="mh-spacer" />
-
-          {pick ? (
-            <div className="mh-readouts" ref={fitStrip}>
-              {status ??
-                (last ? (
-                  <>
-                    {/* In groups, a hairline between them: the ATM strike and its two legs, the
-                        straddle and its session average, then IV. In a slim panel the least needed
-                        pieces give way first, so the straddle itself always fits. */}
-                    {/* The underlying first: spot, then the synthetic future (call − put + strike). MCX
-                        has no spot, so its first figure is the future its options are written on. On a
-                        slim strip the moves go first, then the synthetic; spot stays with the straddle. */}
-                    <span className="mh-readgroup">
-                      <Readout
-                        label={mcx ? "Fut" : "Spot"}
-                        value={fmt2(last.spot)}
-                        change={first ? move(last.spot, first.spot) : null}
-                        changeDrop={1}
-                        title={mcx ? "The future the options are written on" : "The underlying's spot"}
-                      />
-                      <Readout
-                        drop={4}
-                        label={mcx ? "Syn fut" : "Fut"}
-                        value={fmt2(last.synth)}
-                        change={first ? move(last.synth, first.synth) : null}
-                        changeDrop={1}
-                        title="Synthetic future: call − put + strike"
-                      />
-                    </span>
-                    <span className="mh-readgroup" data-drop={5}>
-                      <Readout label="ATM" value={`${fmt0(last.strike)}${last.rolled ? " (rolled)" : ""}`} />
-                      <Readout drop={3} badge side="call" label="CE" value={fmt2(last.call)} title={`${fmt0(last.strike)} call`} />
-                      <Readout drop={3} badge side="put" label="PE" value={fmt2(last.put)} title={`${fmt0(last.strike)} put`} />
-                    </span>
-                    <span className="mh-readgroup">
-                      <Readout label="Straddle" value={fmt2(last.straddle)} change={first ? move(last.straddle, first.straddle) : null} changeDrop={4} />
-                      <Readout drop={2} label="Avg" value={last.vwap != null ? fmt2(last.vwap) : "—"} title="The straddle's average price this session (its VWAP)" />
-                    </span>
-                    <span className="mh-readgroup" data-drop={1}>
-                      <Readout label="IV" value={last.iv != null ? `${last.iv.toFixed(2)}%` : "—"} change={first?.iv != null && last.iv != null ? { text: `${signed(last.iv - first.iv)} pts`, tone: tone(last.iv - first.iv) } : null} />
-                    </span>
-                  </>
-                ) : null)}
-            </div>
+          {/* The toolbar is controls only, TradingView's way: the session's figures read on the
+              chart itself, in its legend (the ATM strike, CE, PE and the straddle with its move;
+              VWAP, spot and the futures), the vol pane's legend (IV) and the readout line in its
+              top-right corner, so every chart of a layout reads its own. */}
+          {status ? (
+            <>
+              <span className="mh-spacer" />
+              {status}
+            </>
           ) : null}
         </PanelHeader>
 
@@ -578,9 +562,12 @@ export function StraddlePage({
                   onRemovePick={(strike) => togglePick(pick.underlying.id, pick.expiry, strike)}
                   // Open while today's minutes keep arriving: a stray minute (a weekend tick) is not a market.
                   trading={live && !closedDay && last !== undefined && Date.now() - last.t < 3 * 60_000}
+                  closedOn={closedDay ? dayLabel(closedDay) : undefined}
                   mcx={mcx}
+                  withTable={tableShown}
                 />
               }
+              table={tableShown && shown ? <StraddleTable shown={shown} open={shownOpen} mcx={mcx} /> : undefined}
               showVix={!pick.underlying.id.startsWith("mcx:")}
               bars={chartBars}
               viewKey={viewKey}
@@ -637,27 +624,13 @@ export function StraddlePage({
   );
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-/** `2026-10-27` → `27 Oct`; the year only when it is not this one. */
-function shortDate(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  const thisYear = Number(istDate(Date.now()).slice(0, 4));
-  return `${d} ${MONTHS[m! - 1]}${y === thisYear ? "" : ` ${y}`}`;
-}
 
 /** An expiry's section in the menu: `October`, or `March 2027` outside this year. */
 function monthOf(ymd: string): string {
   const [y, m] = ymd.split("-").map(Number);
   const thisYear = Number(istDate(Date.now()).slice(0, 4));
   return `${MONTH_NAMES[m! - 1]}${y === thisYear ? "" : ` ${y}`}`;
-}
-
-/** Days to expiry, short, QuantDesk's way: `4d`, and `Today` on the day itself. */
-function daysTo(ymd: string): string {
-  const days = Math.round((Date.parse(`${ymd}T00:00:00Z`) - Date.parse(`${istDate(Date.now())}T00:00:00Z`)) / 86_400_000);
-  return days <= 0 ? "Today" : `${days}d`;
 }
 
 /** What each of the chart's lines is, in the Indicators menu. */
@@ -669,53 +642,3 @@ const INDICATOR_NOTES: Record<LineId, string> = {
   iv: "At the money",
   vix: "NSE's volatility index",
 };
-
-type Tone = "mh-up" | "mh-down" | "";
-const tone = (d: number): Tone => (d > 0 ? "mh-up" : d < 0 ? "mh-down" : "");
-const sign = (d: number) => (d > 0 ? "+" : d < 0 ? "−" : "");
-const signed = (d: number) => `${sign(d)}${fmt2(Math.abs(d))}`;
-
-/** A move since the session's first minute, as a percent. */
-function move(now: number, from: number): { text: string; tone: Tone } {
-  const pct = Number((from !== 0 ? ((now - from) / from) * 100 : 0).toFixed(2));
-  return { text: `${sign(pct)}${Math.abs(pct).toFixed(2)}%`, tone: tone(pct) };
-}
-
-/**
- * One quiet readout on the strip: label one ink tier down, value, and its move since the open. A
- * `badge` label sits in a small plate, as the chips row marks "ATM": the CE and PE legs.
- */
-function Readout({
-  label,
-  value,
-  change,
-  className,
-  badge = false,
-  side,
-  title,
-  drop,
-  changeDrop,
-}: Readonly<{
-  label: string;
-  value: string;
-  change?: { text: string; tone: Tone } | null;
-  className?: string;
-  badge?: boolean;
-  side?: "call" | "put";
-  title?: string;
-  drop?: number;
-  /** The move alone gives way at this rank, the value staying. */
-  changeDrop?: number;
-}>) {
-  return (
-    <span className={className ? `mh-readout ${className}` : "mh-readout"} title={title} data-drop={drop} data-side={side}>
-      <span className={badge ? "mh-readout-label mh-readout-badge" : "mh-readout-label"}>{label}</span>
-      <span className="mh-readout-value">{value}</span>
-      {change ? (
-        <span className={`mh-readout-move ${change.tone}`} data-drop={changeDrop}>
-          {change.text}
-        </span>
-      ) : null}
-    </span>
-  );
-}

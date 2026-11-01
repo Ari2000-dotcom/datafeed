@@ -6,14 +6,17 @@ import { Popover } from "../ui/Popover";
 import type { LegendPick } from "./StraddleLegend";
 
 /**
- * The straddles on the chart, in one box on the strip: the ATM straddle itself (its strike, the
- * premium, the move since the open), and a count of the strikes added beside it. The box opens a
- * menu of every straddle on the chart, each removable, with "Add straddle" at its foot, so five
- * straddles take the strip no more room than one.
+ * The straddles on the chart, in one small box on the strip: the ATM straddle's colour and strike,
+ * and a count of the strikes added beside it. Its premium and move are the strip's Straddle
+ * readout, right after it, so the box does not say them twice and leaves the room to the
+ * underlying's readouts. The box opens a menu of every straddle on the chart with its premium and
+ * move, each removable, with "Add straddle" at its foot, so five straddles take the strip no more
+ * room than one.
  */
 export function StraddleBox({
   colour,
   strike,
+  rolled = false,
   value,
   first,
   picks,
@@ -22,6 +25,8 @@ export function StraddleBox({
 }: Readonly<{
   colour: string;
   strike: number | null;
+  /** The ATM strike moved to a new one at this minute. */
+  rolled?: boolean;
   value: number | null;
   first: number | null;
   picks: readonly LegendPick[];
@@ -67,14 +72,12 @@ export function StraddleBox({
         data-main
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Straddles on the chart"
+        title={rolled ? "Straddles on the chart (the ATM strike rolled at this minute)" : "Straddles on the chart"}
         onClick={() => setOpen((o) => !o)}
       >
         <i style={{ background: colour }} />
         <span className="mh-chipbox-name">{strike !== null ? fmt0(strike) : "ATM"}</span>
         <em>ATM</em>
-        <span style={{ color: colour }}>{value !== null ? fmt2(value) : "—"}</span>
-        <Move value={value} from={first} />
         {picks.length > 0 ? <span className="mh-straddle-box-count">+{picks.length}</span> : null}
         <ChevronDownIcon size={13} />
       </button>

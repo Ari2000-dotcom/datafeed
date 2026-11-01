@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createChart, PaneLegend, type Bar as OaBar, type Chart, type LegendValue, type SeriesApi } from "openalgo-charts";
 
 import { fmt0, fmt2, istDate } from "../core/format";
@@ -11,6 +11,9 @@ import { PaneGrip } from "./PaneGrip";
 import type { OiProfileData, OiProfileMode } from "./useOiProfile";
 import { useChartPixelSnap } from "./useChartPixelSnap";
 import { ScripLegend, type ScripLegendRow } from "./ScripLegend";
+import { MeasureLayer } from "./MeasureLayer";
+import { registerChart } from "./registry";
+import { usePanelId } from "../shell/headerSlot";
 
 /** A live trade: its price and the hub's timestamp, ms. */
 export interface LiveTick {
@@ -112,9 +115,15 @@ export function ScripChart({
   oiProfile,
   oiMode,
   oiUnit = "oi",
+  oiSides = "both",
+  oiSince = 2,
+  oiNote,
   viewKey,
   themeKey,
+  readouts,
 }: Readonly<{
+  /** A line of readouts in the price pane's top-right corner (the last price, its day's move, ATR). */
+  readouts?: ReactNode;
   candles: readonly OaBar[];
   chartType: ScripChartType;
   indicators: readonly IndicatorId[];
@@ -139,6 +148,12 @@ export function ScripChart({
   oiMode: OiProfileMode;
   /** What the bars measure: open interest, or delta x open interest (the tooltip says which). */
   oiUnit?: "oi" | "delta";
+  /** Which side of the book the bars draw; the tooltip then names that side alone. */
+  oiSides?: "both" | "call" | "put";
+  /** Delta x OI: the minutes the change is read against, for the tooltip's heading. */
+  oiSince?: number | null;
+  /** What the figures are in or stand for ("× lot 75", "Fri 30 Oct close"), beside the tooltip's title. */
+  oiNote?: string;
   viewKey: string;
   themeKey: string;
 }>) {
@@ -175,6 +190,7 @@ export function ScripChart({
   const atpShown = useRef<{ name: string; price: number } | null>(null);
 
   useChartPixelSnap(frame, host);
+  const panelId = usePanelId();
 
   const candleStyle = (c: { up: string; down: string }) => ({
     upColor: c.up,
@@ -230,6 +246,8 @@ export function ScripChart({
       timeScale: { lockVisibleTimeRangeOnResize: true },
     });
     chartRef.current = chart;
+    // On the desk's list, for the tools bar (its panel never changes while it is mounted).
+    const unregister = panelId ? registerChart(panelId, chart) : () => {};
     priceRef.current = chart.addSeries(chartType, {
       paneIndex: 0,
       priceScaleId: "right",
@@ -244,6 +262,8 @@ export function ScripChart({
     });
     oiBarsRef.current = new OiProfileBars({ levels: [], mode: oiMode, callColor: colors.up, putColor: colors.down });
     chart.addPrimitive(oiBarsRef.current, 0);
+    // Its figures, over the candles the bars sit behind.
+    chart.addPrimitive(oiBarsRef.current.callouts, 0);
     // The OI tooltip: only while the pointer is over a strike's bars on the price pane.
     const unsubscribe = chart.subscribeCrosshairMove((e) => {
       hoverAt.current = e.time ?? null;
@@ -257,6 +277,7 @@ export function ScripChart({
     const lines = linesRef.current;
     return () => {
       unsubscribe();
+      unregister();
       chart.destroy();
       chartRef.current = null;
       priceRef.current = null;
@@ -500,9 +521,9 @@ export function ScripChart({
           putChange: oiProfile.putChange[i]!,
         }))
       : [];
-    oiBarsRef.current?.setOptions({ levels, mode: oiMode, unit: oiUnit });
+    oiBarsRef.current?.setOptions({ levels, mode: oiMode, unit: oiUnit, sides: oiSides });
     if (levels.length === 0) setTip(null);
-  }, [oiProfile, oiMode, oiUnit]);
+  }, [oiProfile, oiMode, oiUnit, oiSides]);
 
   /* -- the palette: the chart's ground and grid follow the page, the candles their preset ------- */
   useEffect(() => {
@@ -569,6 +590,34 @@ export function ScripChart({
     };
   }, [candles, indicatorKey]);
 
+  // The readout line never covers the legend, as on the straddle chart: level with the legend's
+  // first line where there is room, a line lower (beside the indicator rows) where that line
+  // reaches under it, and gone where neither fits. Measured after every render, as the numbers
+  // change the widths, and as either one resizes.
+  const legendBox = useRef<HTMLDivElement>(null);
+  const readoutsBox = useRef<HTMLDivElement>(null);
+  const placeReadouts = useCallback(() => {
+    const box = readoutsBox.current;
+    const piece = box?.firstElementChild;
+    if (!box || !piece) return;
+    box.style.transform = "";
+    const rows = legendBox.current ? [...legendBox.current.querySelectorAll(".mh-legend-row, .mh-legend-toggler")].map((row) => row.getBoundingClientRect()) : [];
+    const first = legendBox.current?.querySelector(".mh-legend-main")?.getBoundingClientRect();
+    const r = piece.getBoundingClientRect();
+    // Room kept clear round the legend's rows: 12px beside, 8px under.
+    const covers = (dy: number) => rows.some((q) => q.right + 12 > r.left && q.left < r.right && q.bottom + 8 > r.top + dy && q.top < r.bottom + dy);
+    const dy = first && covers(0) ? Math.ceil(first.bottom + 8 - r.top) : 0;
+    const collides = r.width > box.clientWidth || covers(dy);
+    box.style.transform = dy > 0 && !collides ? `translateY(${dy}px)` : "";
+    box.toggleAttribute("data-collides", collides);
+  }, []);
+  useLayoutEffect(placeReadouts);
+  useEffect(() => {
+    const ro = new ResizeObserver(placeReadouts);
+    for (const box of [legendBox, readoutsBox]) if (box.current?.firstElementChild) ro.observe(box.current.firstElementChild);
+    return () => ro.disconnect();
+  }, [placeReadouts, plot, readouts !== undefined]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // The hovered strike's figures as they are now, so a still pointer sees them move.
   const tipLevel = useMemo<OiBarLevel | null>(() => {
     if (!tip || !oiProfile) return null;
@@ -580,7 +629,7 @@ export function ScripChart({
     <div className="oa-chart-frame" ref={frame}>
       <div ref={host} className="oa-chart" aria-label="Price chart with indicators" />
       {plot ? (
-        <div className="mh-legend-anchor" style={{ left: plot.left + 8, top: plot.top + 6, width: plot.width - 16 }}>
+        <div ref={legendBox} className="mh-legend-anchor" style={{ left: plot.left + 8, top: plot.top + 6, width: plot.width - 16 }}>
           <ScripLegend
             name={name}
             interval={intervalLabel}
@@ -596,7 +645,13 @@ export function ScripChart({
           />
         </div>
       ) : null}
-      {tipLevel && tip ? <OiTip x={tip.x} y={tip.y} level={tipLevel} colors={colors} unit={oiUnit} mode={oiMode} /> : null}
+      {readouts && plot ? (
+        <div ref={readoutsBox} className="mh-chart-readouts-anchor" style={{ left: plot.left + 8, top: plot.top + 6, width: plot.width - 16 }}>
+          {readouts}
+        </div>
+      ) : null}
+      {tipLevel && tip ? <OiTip x={tip.x} y={tip.y} level={tipLevel} colors={colors} unit={oiUnit} mode={oiMode} sides={oiSides} since={oiSince} note={oiNote} /> : null}
+      <MeasureLayer getChart={() => chartRef.current} stepSec={stepSec} />
     </div>
   );
 }
@@ -645,11 +700,34 @@ function Move({ v, text }: Readonly<{ v: number; text: string }>) {
  * the two make of it. Open interest: the total and the put/call ratio. Delta x OI: the net
  * exposure (calls less puts), long or short.
  */
-function OiTip({ x, y, level, colors, unit, mode }: Readonly<{ x: number; y: number; level: OiBarLevel; colors: { up: string; down: string }; unit: "oi" | "delta"; mode: OiProfileMode }>) {
+function OiTip({
+  x,
+  y,
+  level,
+  colors,
+  unit,
+  mode,
+  sides,
+  since,
+  note,
+}: Readonly<{
+  x: number;
+  y: number;
+  level: OiBarLevel;
+  colors: { up: string; down: string };
+  unit: "oi" | "delta";
+  mode: OiProfileMode;
+  sides: "both" | "call" | "put";
+  /** Null where there is no change to read (a past session's board is one reading). */
+  since: number | null;
+  note?: string;
+}>) {
   const delta = unit === "delta";
+  const calls = sides !== "put";
+  const puts = sides !== "call";
   const fmt = delta ? compact : whole;
   const fmtMove = delta ? compactSigned : signed;
-  const showMove = mode !== "oi";
+  const showMove = mode !== "oi" && !(delta && since === null);
   const box = useRef<HTMLDivElement>(null);
   // Kept whole inside the chart: near the top or bottom edge the box slides in rather than being cut.
   useLayoutEffect(() => {
@@ -666,45 +744,52 @@ function OiTip({ x, y, level, colors, unit, mode }: Readonly<{ x: number; y: num
     <div ref={box} className="mh-oi-tip" style={{ right: `calc(100% - ${x - 12}px)`, top: y }} role="tooltip">
       <div className="mh-oi-tip-head">
         {fmt2(level.price)}
-        <span>{delta ? "Delta × OI" : "Open interest"}</span>
+        <span>{[delta ? "Delta × OI" : "Open interest", note].filter(Boolean).join(" · ")}</span>
       </div>
       <table>
         <thead>
           <tr>
             <th />
             <th>{delta ? "Δ×OI" : "OI"}</th>
-            {showMove ? <th>{delta ? "vs 2 min" : "Today"}</th> : null}
+            {showMove ? <th>{delta ? `vs ${since} min` : "Today"}</th> : null}
           </tr>
         </thead>
         <tbody>
-          <tr style={{ color: colors.up }}>
-            <th>Call</th>
-            <td>{fmt(level.call)}</td>
-            {showMove ? (
-              <td>
-                <Move v={level.callChange} text={fmtMove(level.callChange)} />
-              </td>
-            ) : null}
-          </tr>
-          <tr style={{ color: colors.down }}>
-            <th>Put</th>
-            <td>{fmt(level.put)}</td>
-            {showMove ? (
-              <td>
-                <Move v={level.putChange} text={fmtMove(level.putChange)} />
-              </td>
-            ) : null}
-          </tr>
+          {calls ? (
+            <tr style={{ color: colors.up }}>
+              <th>Call</th>
+              <td>{fmt(level.call)}</td>
+              {showMove ? (
+                <td>
+                  <Move v={level.callChange} text={fmtMove(level.callChange)} />
+                </td>
+              ) : null}
+            </tr>
+          ) : null}
+          {puts ? (
+            <tr style={{ color: colors.down }}>
+              <th>Put</th>
+              <td>{fmt(level.put)}</td>
+              {showMove ? (
+                <td>
+                  <Move v={level.putChange} text={fmtMove(level.putChange)} />
+                </td>
+              ) : null}
+            </tr>
+          ) : null}
         </tbody>
-        <tfoot>
-          <tr>
-            <th>{delta ? "Net" : "PCR"}</th>
-            <td className={delta && Number.isFinite(net) ? (net > 0 ? "mh-up" : net < 0 ? "mh-down" : "") : ""}>
-              {delta ? (Number.isFinite(net) ? `${net > 0 ? "Long " : net < 0 ? "Short " : ""}${compact(net)}` : "—") : Number.isFinite(pcr) ? pcr.toFixed(2) : "—"}
-            </td>
-            {showMove ? <td /> : null}
-          </tr>
-        </tfoot>
+        {/* What the two sides make of a strike is only there with both showing. */}
+        {sides === "both" ? (
+          <tfoot>
+            <tr>
+              <th>{delta ? "Net" : "PCR"}</th>
+              <td className={delta && Number.isFinite(net) ? (net > 0 ? "mh-up" : net < 0 ? "mh-down" : "") : ""}>
+                {delta ? (Number.isFinite(net) ? `${net > 0 ? "Long " : net < 0 ? "Short " : ""}${compact(net)}` : "—") : Number.isFinite(pcr) ? pcr.toFixed(2) : "—"}
+              </td>
+              {showMove ? <td /> : null}
+            </tr>
+          </tfoot>
+        ) : null}
       </table>
     </div>
   );

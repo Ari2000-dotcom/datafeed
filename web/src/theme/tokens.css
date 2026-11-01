@@ -19,23 +19,26 @@
  */
 
 /*
- * Neutral: the default. Flat grey with no hue, so the candles and the data colours are the only
- * colour on the page.
+ * Neutral: the default. Greys with no hue, so the candles and the data colours are the only colour
+ * on the page. Each plate (chart, toolbar, rail) sits on a lighter grey workspace that frames it by
+ * tone alone, no edge drawn; the plate itself is a deep near-black, so the chart's lines and tags
+ * read with the contrast of a black ground while the desk keeps its containers (user, 2026-11-01:
+ * the grey canvas over the all-black one, with the deeper chart ground).
  */
 :root,
 [data-canvas="neutral"] {
-  --mh-chrome: #111111;
-  --mh-well: #0b0b0b;
-  --mh-workspace: #292929;
-  --mh-bg: #1b1b1b;
-  --mh-head: #232323;
-  --mh-surface-1: #202020;
-  --mh-surface-2: #2b2b2b;
-  --mh-surface-3: #383838;
-  --mh-line: #2a2a2a;
-  --mh-line-strong: #3d3d3d;
+  --mh-chrome: #0e0e0e;
+  --mh-well: #090909;
+  --mh-workspace: #222222;
+  --mh-bg: #151515;
+  --mh-head: #1a1a1a;
+  --mh-surface-1: #1b1b1b;
+  --mh-surface-2: #262626;
+  --mh-surface-3: #323232;
+  --mh-line: #222222;
+  --mh-line-strong: #333333;
   --mh-plate-edge: transparent;
-  --mh-strip-edge: #3d3d3d;
+  --mh-strip-edge: #262626;
   --mh-hover-wash: rgb(255 255 255 / 4%);
   --mh-text-strong: #e6e6e6;
   --mh-text-primary: #cecece;
@@ -106,11 +109,13 @@
 :root {
   color-scheme: dark;
   /* -- the desk (theme/dock.css): the dock's measures and its accent ----------------- */
-  --mh-dock-tab-h: 28px;
-  /* Plates on a lighter workspace: 6px between two (3px each side) and 6px round the desk (the
-     host's 3px and the gutter's), a 6px corner each. */
+  /* Plates on a lighter workspace: one 3px gutter between every two regions and round the desk, a
+     6px corner each. */
   --mh-dock-gutter: 3px;
   --mh-dock-radius: 6px;
+  /* Each chart's folder tab, QuantDesk's height, and the grey frame a pointed-at tab takes. */
+  --mh-dock-tab-h: 26px;
+  --mh-tab-hover-edge: rgb(255 255 255 / 22%);
   /* The one accent: TradingView's blue. Fills, rules and rings use it as is; text in it uses the
      lighter shade, which holds 5:1 on every ground. */
   --mh-accent: #2962ff;
@@ -172,10 +177,8 @@
   --mh-chart-crosshair: var(--mh-text-tertiary);
   --mh-chart-crosshair-tag: var(--mh-chrome);
 
-  /* -- a container's header strip (QuantDesk's): its height, and the crisp
-     three-row cast under its rule, never a blur. ----------------------- */
+  /* -- a panel's strip (its picker row) where it is not the toolbar's ------ */
   --mh-strip-h: 36px;
-  --mh-strip-cast: linear-gradient(to bottom, rgb(0 0 0 / 34%) 0 1px, rgb(0 0 0 / 18%) 1px 2px, rgb(0 0 0 / 7%) 2px 3px);
 
   /* -- type ------------------------------------------------------------ */
   /* One face for the whole page: the chart's (TradingView's stack, vendor/openalgo-charts/src/
@@ -203,7 +206,14 @@
   --mh-radius-card: 10px;
   --mh-radius-pill: 980px;
   --mh-control-h: 28px;
-  --mh-titlebar-h: 38px;
+  /* The site's app bar, then the desk's regions, TradingView's measures: the chart toolbar row, the
+     tools bar and the rail, the footer, and the one gutter between every two (the grid's, so its
+     charts line up with them). */
+  --mh-appbar-h: 36px;
+  --mh-toolbar-h: 38px;
+  --mh-rail-w: 44px;
+  --mh-footer-h: 30px;
+  --mh-gap: var(--mh-dock-gutter);
 
   /* -- motion ------------------------------------------------------------ */
   --mh-ease: cubic-bezier(0.4, 0, 0.6, 1);

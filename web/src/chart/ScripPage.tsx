@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { dayLabel, fmt0, fmt2, nearestExpiry } from "../core/format";
+import { dayLabel, expiryDate, expiryDays, fmt0, fmt2, nearestExpiry, pastWeekdays } from "../core/format";
 import { previousClose } from "../core/previousClose";
 import { useUniverse } from "../core/universe";
 import type { Hub } from "../hub/client";
@@ -33,6 +33,9 @@ import { IntervalPicker } from "./IntervalPicker";
 import { ATR_PERIOD, atrPoints, CANDLE_INTERVALS, useCandles } from "./useCandles";
 import { delta76, yearsToExpiry } from "../core/black76";
 import { useDeltaOi, type Band } from "../greeks/useDeltaOi";
+import { useDeltaOiDay, type DayBand } from "../greeks/useDeltaOiDay";
+import { DeltaOiSettings } from "./DeltaOiSettings";
+import { useDeltaOiView } from "./deltaOiView";
 import { useExposureTrend, type ExposureRow } from "./useExposureTrend";
 import { useOiProfile, type OiProfileMode } from "./useOiProfile";
 import { ScripChart, type LiveTick } from "./ScripChart";
@@ -63,10 +66,10 @@ const OI_VIEWS: readonly {
   note: string;
   Icon: typeof OiBothIcon;
 }[] = [
-  { value: "both", short: "OI + chg", label: "Total OI with today's change", note: "Total, today's addition marked", Icon: OiBothIcon },
+  { value: "both", short: "OI + chg", label: "Total OI with today's change", note: "Today's addition marked", Icon: OiBothIcon },
   { value: "oi", short: "Total OI", label: "Total OI", note: "Open interest per strike", Icon: OiTotalIcon },
   { value: "change", short: "OI change", label: "Today's OI change", note: "Added or shed today", Icon: OiChangeIcon },
-  { value: "delta", short: "Δ × OI", label: "Delta × OI", note: "Every strike, vs 2 min", Icon: DeltaOiIcon },
+  { value: "delta", short: "Δ × OI", label: "Delta × OI", note: "Every strike, and its change", Icon: DeltaOiIcon },
   { value: "off", short: "OI off", label: "Hide the OI profile", note: "", Icon: EyeOffIcon },
 ];
 
@@ -74,6 +77,18 @@ export interface ScripPick {
   id: string;
   name: string;
   interval: string;
+}
+
+/** Past sessions the Δ × OI settings offer, as the Delta × OI panel's session picker does. */
+const PAST_DAYS = 3;
+
+/** The `each` strikes either side of the one nearest `at`. */
+function around<T extends { strike: number }>(rows: readonly T[], at: number, each: number): T[] {
+  let atm = 0;
+  rows.forEach((r, i) => {
+    if (Math.abs(r.strike - at) < Math.abs(rows[atm]!.strike - at)) atm = i;
+  });
+  return rows.slice(Math.max(0, atm - each), atm + each + 1);
 }
 
 export function ScripPage({
@@ -125,19 +140,38 @@ export function ScripPage({
   // Hidden asks the hub for nothing: no expiries, no profile.
   const deltaOn = oiView === "delta";
   // Delta × OI is for one expiry (the first picked); the other views sum all of them.
-  const { data: oiProfile } = useOiProfile(hub, id, oiView === "off" ? [] : deltaOn ? pickedExpiries.slice(0, 1) : pickedExpiries);
+  const deltaExpiry = deltaOn ? (pickedExpiries[0] ?? "") : "";
+
+  // How the Δ × OI bars are cut (the settings button): the session, the strikes either side of the
+  // money, the side, the units and the span the change is read over. The session is the chart's
+  // own and starts at Today for every underlying and expiry, as the Delta × OI panel's does.
+  const [doiView, setDoiView] = useDeltaOiView();
+  const [session, setSession] = useState("live");
+  useEffect(() => setSession("live"), [id, pickedExpiries[0]]); // eslint-disable-line react-hooks/exhaustive-deps
+  const past = deltaOn && session !== "live";
+  const lot = underlyingOf.get(id)?.lot ?? 1;
+  const scale = doiView.unit === "lot" ? lot : 1;
+  const sessions = [
+    { value: "live", label: "Today" },
+    ...(deltaExpiry ? pastWeekdays(PAST_DAYS).filter((d) => d <= deltaExpiry) : []).map((d) => ({ value: d, label: dayLabel(d) })),
+  ];
+
+  // A past session needs no live profile: it reads its own board (`useDeltaOiDay`) instead.
+  const { data: oiProfile } = useOiProfile(hub, id, oiView === "off" || past ? [] : deltaOn ? pickedExpiries.slice(0, 1) : pickedExpiries);
 
   // Delta × OI over every strike of the expiry. The OI of the whole chain is one request (the same
   // profile as the other views); what a strike's delta needs is the forward and the ATM vol, and
   // those come from the two at-the-money legs alone. Pricing each strike's own legs would mean a
   // live subscription per leg, which the hub's per-visitor limit cuts to a few strikes when other
   // panels are open. So the deltas use one vol across the chain (the ATM's): the skew is left out.
-  const deltaExpiry = deltaOn ? (pickedExpiries[0] ?? "") : "";
-  const doi = useDeltaOi(hub, deltaOn ? id : "", deltaExpiry, 0 as unknown as Band);
+  const doi = useDeltaOi(hub, deltaOn && !past ? id : "", deltaExpiry, 0 as unknown as Band);
+  // A past session: that day's board at its close, narrowed to the strikes asked for.
+  const day = useDeltaOiDay(hub, past ? id : "", past ? deltaExpiry : "", past ? session : "", doiView.range === "all" ? "full" : (doiView.range as DayBand));
   const heldRows = useRef<{ key: string; rows: ExposureRow[] }>({ key: "", rows: [] });
-  const deltaKey = `${id}|${deltaExpiry}`;
-  const deltaRows = useMemo(() => {
+  const deltaKey = `${id}|${deltaExpiry}|${past ? session : "live"}`;
+  const baseRows = useMemo<ExposureRow[]>(() => {
     if (!deltaOn) return [];
+    if (past) return day.rows.map((r) => ({ strike: r.strike, callDeltaOi: r.callDeltaOi, putDeltaOi: r.putDeltaOi }));
     // The ATM vol or the forward drops out for a beat now and then (a leg's price not yet in, a vol
     // that does not solve): the bars hold the last good picture then, rather than vanishing.
     if (!oiProfile || doi.forward === null || doi.atmIv === null) return heldRows.current.key === deltaKey ? heldRows.current.rows : [];
@@ -151,8 +185,18 @@ export function ScripPage({
     }));
     heldRows.current = { key: deltaKey, rows };
     return rows;
-  }, [deltaOn, oiProfile, doi.forward, doi.atmIv, deltaExpiry, id, deltaKey]);
-  const deltaProfile = useExposureTrend(deltaRows, deltaOn, deltaKey);
+  }, [deltaOn, past, day.rows, oiProfile, doi.forward, doi.atmIv, deltaExpiry, id, deltaKey]);
+  // The strikes asked for (a past session's are already cut by the hub's read), in the units asked for.
+  const deltaRows = useMemo<ExposureRow[]>(() => {
+    const at = doi.spot ?? doi.forward;
+    const cut = past || doiView.range === "all" || at === null || baseRows.length === 0 ? baseRows : around(baseRows, at, doiView.range);
+    if (scale === 1) return cut;
+    return cut.map((r) => ({ strike: r.strike, callDeltaOi: r.callDeltaOi === null ? null : r.callDeltaOi * scale, putDeltaOi: r.putDeltaOi === null ? null : r.putDeltaOi * scale }));
+  }, [baseRows, past, doiView.range, doi.spot, doi.forward, scale]);
+  // Changing the units starts the change over: the readings kept were in the other ones.
+  const deltaProfile = useExposureTrend(deltaRows, deltaOn, `${deltaKey}|${doiView.unit}`, doiView.since * 60_000);
+  const deltaStatus = past ? (day.error || (day.needsHub ? "Needs the hub update" : day.noOi ? "No open interest that day" : "") || day.waiting) : doi.error || doi.waiting;
+  const oiNote = deltaOn ? [past ? `${dayLabel(session)} close` : "", doiView.unit === "lot" ? `× lot ${fmt0(lot)}` : ""].filter(Boolean).join(" · ") || undefined : undefined;
 
   const spec = CANDLE_INTERVALS.find((c) => c.value === interval) ?? CANDLE_INTERVALS[CANDLE_INTERVALS.length - 1]!;
   const priceId = usePriceId(hub, id, allExpiries);
@@ -214,7 +258,10 @@ export function ScripPage({
   const last = live ?? candles[candles.length - 1]?.close ?? null;
   const chg = last !== null && prevClose !== null ? last - prevClose : null;
   const chgPct = chg !== null && prevClose ? (chg / prevClose) * 100 : null;
-  const fitReadouts = useFitRow();
+
+  // The strip gives way piece by piece rather than clipping its end: the OI view's name first
+  // (its icon stays), then the candle colours, the expiries, and last the OI view itself.
+  const fitStrip = useFitRow();
 
   const quickPick = (name: string) => {
     const u = universe.find((x) => x.name === name);
@@ -224,7 +271,7 @@ export function ScripPage({
   return (
     <div className="mh-page">
       <section className="mh-container" aria-label="Scrip chart">
-        <PanelHeader className="mh-strip mh-tv-strip">
+        <PanelHeader className="mh-strip mh-tv-strip" rowRef={fitStrip}>
           <Dropdown
             label="Underlying"
             caption={false}
@@ -256,105 +303,73 @@ export function ScripPage({
             />
             {/* A line or an area draws in one colour: the up/down pair only means something to candles and bars. */}
             {isLineType(chartType) ? null : (
-              <Dropdown
-                label="Candles"
-                caption={false}
-                value={paletteId}
-                onChange={setPaletteId}
-                renderValue={() => <Swatch up={colors.up} down={colors.down} />}
-                options={CANDLE_PALETTES.map((p) => {
-                  const c = paletteColors(p.id);
-                  return { value: p.id, label: p.name, icon: <Swatch up={c.up} down={c.down} /> };
-                })}
-              />
+              <span className="mh-fit-piece" data-drop={2}>
+                <Dropdown
+                  label="Candles"
+                  caption={false}
+                  value={paletteId}
+                  onChange={setPaletteId}
+                  renderValue={() => <Swatch up={colors.up} down={colors.down} />}
+                  options={CANDLE_PALETTES.map((p) => {
+                    const c = paletteColors(p.id);
+                    return { value: p.id, label: p.name, icon: <Swatch up={c.up} down={c.down} /> };
+                  })}
+                />
+              </span>
             )}
             <span className="mh-tv-sep" aria-hidden />
             <MultiDropdown
               label="Indicators"
-              caption={false}
+              icon={<IndicatorsIcon />}
               value={indicators}
               onChange={setIndicators}
-              renderValue={(picked) => (
-                <span className="mh-ind-trigger">
-                  <IndicatorsIcon size={16} /> Indicators
-                  {picked.length > 0 ? <span className="mh-ind-count">{picked.length}</span> : null}
-                </span>
-              )}
               options={INDICATORS.map((d) => ({ value: d.id, label: d.name, note: d.note }))}
             />
           </span>
           {id && allExpiries.length > 0 ? (
             <>
-              <span className="mh-tv-sep" aria-hidden />
-              <MultiDropdown
-                label="Expiry"
-                caption={false}
-                value={pickedExpiries}
-                onChange={setExpiries}
-                renderValue={(picked) =>
-                  picked.length === 0
-                    ? "No expiry"
-                    : picked.length === 1
-                      ? dayLabel(picked[0]!.value)
-                      : `${picked.length} expiries`
-                }
-                options={allExpiries.map((e) => ({ value: e, label: dayLabel(e) }))}
-              />
-              <Dropdown
-                label="OI profile"
-                caption={false}
-                value={oiView}
-                onChange={setOiView}
-                renderValue={(o) => {
-                  const v = OI_VIEWS.find((x) => x.value === o?.value);
-                  return v ? (
-                    <>
-                      <v.Icon size={16} /> {v.short}
-                      {deltaOn && deltaRows.length === 0 ? <span className="mh-chip">{doi.error || doi.waiting}</span> : null}
-                    </>
-                  ) : null;
-                }}
-                options={OI_VIEWS.map(({ value, label, note, Icon }) => ({ value, label, note, icon: <Icon size={16} />, separator: value === "off" }))}
-              />
+              <span className="mh-fit-piece" data-drop={3}>
+                <span className="mh-tv-sep" aria-hidden />
+                <MultiDropdown
+                  label="Expiry"
+                  caption={false}
+                  value={pickedExpiries}
+                  onChange={setExpiries}
+                  renderValue={(picked) =>
+                    picked.length === 0 ? (
+                      "No expiry"
+                    ) : picked.length === 1 ? (
+                      // As the straddle's toolbar writes it: the date, then the days left in the quieter ink.
+                      <>
+                        {expiryDate(picked[0]!.value)} <span className="mh-picker-aside">{expiryDays(picked[0]!.value)}</span>
+                      </>
+                    ) : (
+                      `${picked.length} expiries`
+                    )
+                  }
+                  options={allExpiries.map((e) => ({ value: e, label: dayLabel(e) }))}
+                />
+              </span>
+              <span className="mh-fit-piece" data-drop={4}>
+                <Dropdown
+                  label="OI profile"
+                  caption={false}
+                  value={oiView}
+                  onChange={setOiView}
+                  renderValue={(o) => {
+                    const v = OI_VIEWS.find((x) => x.value === o?.value);
+                    return v ? (
+                      <>
+                        <v.Icon /> <span data-drop={1}>{v.short}</span>
+                        {deltaOn && deltaRows.length === 0 ? <span className="mh-chip">{deltaStatus}</span> : null}
+                      </>
+                    ) : null;
+                  }}
+                  options={OI_VIEWS.map(({ value, label, note, Icon }) => ({ value, label, note, icon: <Icon />, separator: value === "off" }))}
+                />
+                {deltaOn ? <DeltaOiSettings view={doiView} onChange={setDoiView} session={session} sessions={sessions} onSession={setSession} lot={lot} /> : null}
+              </span>
             </>
-          ) : null}
-          <span className="mh-spacer" />
-          {/* A new interval loads behind the candles already up: said quietly, not by blanking them. */}
-          {id && candles.length > 0 && (loading || note) ? (
-            <span className="mh-hint">
-              <Spinner size={13} />
-              {note ?? `Loading ${spec.name}`}
-            </span>
-          ) : null}
-          {id && last !== null ? (
-            // Measured like the straddle strip's (ui/fitRow.ts): ATR gives way first, then the
-            // day's change, and the last price always stays, never cut at the panel's edge.
-            <div className="mh-readouts" ref={fitReadouts}>
-              <span className="mh-readgroup">
-                <span className="mh-readout">
-                  <span className="mh-readout-label">Last</span>
-                  <span className="mh-readout-value">{fmt2(last)}</span>
-                  {chg !== null && chgPct !== null ? (
-                    <>
-                      <span className={`mh-readout-delta ${toneOf(chg)}`} data-drop={2}>
-                        {signOf(chg)}
-                        {fmt2(Math.abs(chg))}
-                      </span>
-                      <span className={`mh-readout-move ${toneOf(chg)}`} data-drop={2}>
-                        {signOf(chgPct)}
-                        {Math.abs(chgPct).toFixed(2)}%
-                      </span>
-                    </>
-                  ) : null}
-                </span>
-              </span>
-              <span className="mh-readgroup" data-drop={1}>
-                <span className="mh-readout">
-                  <span className="mh-readout-label">ATR {ATR_PERIOD}</span>
-                  <span className="mh-readout-value">{atrValue !== null ? fmt2(atrValue) : "—"}</span>
-                </span>
-              </span>
-            </div>
           ) : null}
         </PanelHeader>
         <div className="mh-container-body">
@@ -376,8 +391,49 @@ export function ScripPage({
               oiProfile={oiView === "off" ? null : deltaOn ? deltaProfile : oiProfile}
               oiMode={oiView === "off" ? "both" : deltaOn ? "both" : oiView}
               oiUnit={deltaOn ? "delta" : "oi"}
+              oiSides={deltaOn ? doiView.sides : "both"}
+              oiSince={past ? null : doiView.since}
+              oiNote={oiNote}
               viewKey={viewKey}
               themeKey={themeKey}
+              readouts={
+                // On the chart, so every chart in a layout reads its own: the day's move from
+                // yesterday's close and the ATR, and a new interval loading behind the candles up.
+                last !== null ? (
+                  <span className="mh-chart-readouts">
+                    {loading || note ? (
+                      <span className="mh-hint">
+                        <Spinner size={13} />
+                        {note ?? `Loading ${spec.name}`}
+                      </span>
+                    ) : null}
+                    <span className="mh-readgroup">
+                      <span className="mh-readout">
+                        <span className="mh-readout-label">Last</span>
+                        <span className="mh-readout-value">{fmt2(last)}</span>
+                        {chg !== null && chgPct !== null ? (
+                          <>
+                            <span className={`mh-readout-delta ${toneOf(chg)}`}>
+                              {signOf(chg)}
+                              {fmt2(Math.abs(chg))}
+                            </span>
+                            <span className={`mh-readout-move ${toneOf(chg)}`}>
+                              {signOf(chgPct)}
+                              {Math.abs(chgPct).toFixed(2)}%
+                            </span>
+                          </>
+                        ) : null}
+                      </span>
+                    </span>
+                    <span className="mh-readgroup">
+                      <span className="mh-readout">
+                        <span className="mh-readout-label">ATR {ATR_PERIOD}</span>
+                        <span className="mh-readout-value">{atrValue !== null ? fmt2(atrValue) : "—"}</span>
+                      </span>
+                    </span>
+                  </span>
+                ) : undefined
+              }
             />
           ) : id ? (
             <div className="mh-empty">
@@ -445,7 +501,7 @@ const TYPE_ICONS: Record<ScripChartType, typeof CandlesIcon> = {
 /** A chart type's picture, as TradingView's chart-type button shows it. */
 function ChartTypeIcon({ type }: Readonly<{ type: ScripChartType }>) {
   const Icon = TYPE_ICONS[type];
-  return <Icon size={18} />;
+  return <Icon />;
 }
 
 /**

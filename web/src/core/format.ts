@@ -38,4 +38,19 @@ export function pastWeekdays(n: number): string[] {
 }
 
 /** The nearest expiry that has not passed (today's counts until the day is over): a list from the hub can still carry yesterday's. */
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** An expiry on a toolbar: `2026-10-27` → `27 Oct`; the year only when it is not this one. */
+export function expiryDate(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const thisYear = Number(istDate(Date.now()).slice(0, 4));
+  return `${d} ${SHORT_MONTHS[m! - 1]}${y === thisYear ? "" : ` ${y}`}`;
+}
+
+/** Days to an expiry, short, QuantDesk's way: `4d`, and `Today` on the day itself. */
+export function expiryDays(ymd: string): string {
+  const days = Math.round((Date.parse(`${ymd}T00:00:00Z`) - Date.parse(`${istDate(Date.now())}T00:00:00Z`)) / 86_400_000);
+  return days <= 0 ? "Today" : `${days}d`;
+}
+
 export const nearestExpiry = (expiries: readonly string[]): string => expiries.find((d) => d >= istDate(Date.now())) ?? expiries[expiries.length - 1] ?? "";
