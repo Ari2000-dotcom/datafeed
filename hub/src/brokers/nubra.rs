@@ -28,7 +28,7 @@ use crate::model::{Candle, Interval, PieceKey};
 use crate::ratelimit::{LimitSpec, Limiter};
 use crate::secure_store;
 use async_trait::async_trait;
-use chrono::{Datelike, Duration as CDur, Local, NaiveDate, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration as CDur, Local, NaiveDate, NaiveTime, TimeZone, Utc};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -687,19 +687,38 @@ impl Nubra {
 
     /// One `charts/timeseries` query: these symbols, whole IST days `from` to `to`.
     async fn timeseries(&self, exch: &str, kind: &str, symbols: &[String], from: NaiveDate, to: NaiveDate, interval: Interval) -> Result<Value, FetchError> {
-        let (token, device) = self.session().await?;
-        // Whole IST calendar days, in UTC as Nubra expects (IST midnight is 18:30Z the day before).
-        let midnight = |d: NaiveDate| crate::clock::ist().from_local_datetime(&d.and_time(NaiveTime::MIN)).single().expect("IST has no gaps");
-        let start = midnight(from).with_timezone(&Utc);
-        let end = (midnight(to) + CDur::days(1) - CDur::seconds(1)).with_timezone(&Utc);
+        let start = midnight_utc(from);
+        let end = midnight_utc(to) + CDur::days(1) - CDur::seconds(1);
         let body = json!({"query": [{
             "exchange": exch, "type": kind, "values": symbols,
             "fields": ["open", "high", "low", "close", "cumulative_volume"],
-            "startDate": start.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
-            "endDate": end.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+            "startDate": rfc3339(start),
+            "endDate": rfc3339(end),
             "interval": Self::interval(interval), "intraDay": false, "realTime": false,
         }]});
+        self.post_timeseries(&body).await
+    }
 
+    /// One `charts/timeseries` query for every option leg's minute open interest through a whole
+    /// IST day (QuantDesk `nubra_strike_oi::session_legs`): `multistrike` only carries the latest
+    /// session minute by minute (and, for the one before it, a single flat close) — any older day
+    /// answers nothing there, so a past session's board is rebuilt from this instead. At most 8
+    /// symbols a query (`max_batch`); more come back missing, not erroring.
+    pub async fn option_oi_series(&self, exch: &str, symbols: &[String], day: NaiveDate) -> Result<Value, FetchError> {
+        let start = midnight_utc(day);
+        let end = start + CDur::days(1) - CDur::seconds(1);
+        let body = json!({"query": [{
+            "exchange": exch, "type": "OPT", "values": symbols,
+            "fields": ["cumulative_oi"],
+            "startDate": rfc3339(start),
+            "endDate": rfc3339(end),
+            "interval": "1m", "intraDay": false, "realTime": false,
+        }]});
+        self.post_timeseries(&body).await
+    }
+
+    async fn post_timeseries(&self, body: &Value) -> Result<Value, FetchError> {
+        let (token, device) = self.session().await?;
         let resp = self
             .client
             .post(format!("{}/charts/timeseries", self.base))
@@ -707,7 +726,7 @@ impl Nubra {
             .header("x-app-version", APP_VERSION)
             .header("x-device-os", DEVICE_OS)
             .bearer_auth(&token)
-            .json(&body)
+            .json(body)
             .send()
             .await
             .map_err(|e| FetchError::Other(e.to_string()))?;
@@ -731,6 +750,15 @@ impl Nubra {
         }
         Ok(v)
     }
+}
+
+/// Midnight IST of `d`, in UTC (IST midnight is 18:30Z the day before).
+fn midnight_utc(d: NaiveDate) -> DateTime<Utc> {
+    crate::clock::ist().from_local_datetime(&d.and_time(NaiveTime::MIN)).single().expect("IST has no gaps").with_timezone(&Utc)
+}
+
+fn rfc3339(t: DateTime<Utc>) -> String {
+    t.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 /// `result[0].values = [{SYMBOL: {field: [{ts(ns), v}]}}]` → candles by IST
@@ -825,5 +853,13 @@ mod tests {
     #[test]
     fn masks_phone() {
         assert_eq!(masked("9876543210"), "••••••3210");
+    }
+
+    /// IST midnight is 18:30 the previous UTC day — the window `timeseries` and
+    /// `option_oi_series` both build their `startDate`/`endDate` from.
+    #[test]
+    fn midnight_ist_is_the_previous_utc_evening() {
+        let d = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
+        assert_eq!(rfc3339(midnight_utc(d)), "2026-10-29T18:30:00.000Z");
     }
 }

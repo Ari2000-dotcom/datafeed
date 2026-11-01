@@ -596,6 +596,15 @@ impl Instruments {
             .collect())
     }
 
+    /// Whether `expiry` is the last one of its calendar month for this underlying — NSE/BSE spell
+    /// such an option's Nubra symbol with the month name instead of the weekly form (see
+    /// `Described::monthly`). `true` when the underlying's own expiry list cannot say.
+    pub fn monthly_for(&self, market: Market, name_upper: &str, expiry: NaiveDate) -> bool {
+        self.get(market, name_upper)
+            .map(|u| !u.expiries.iter().any(|e| *e > expiry && e.year() == expiry.year() && e.month() == expiry.month()))
+            .unwrap_or(true)
+    }
+
     /// From the RAM cache; a miss reads the exchange's file once and caches every chain on it.
     fn chain_rows(&self, market: Market, name_upper: &str, expiry: NaiveDate) -> anyhow::Result<Arc<Vec<ChainRow>>> {
         let key = (market, name_upper.to_string(), expiry);

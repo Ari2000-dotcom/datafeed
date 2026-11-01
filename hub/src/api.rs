@@ -15,6 +15,9 @@
 //!   ← {"t":"straddle","topic":...,"n":N,"bar":{...},"prev":{...}}   every second
 //!   → {"op":"straddle_history","req":"p1","underlying":"nse:nifty","expiry":"2026-10-27","date":"2026-10-23"}
 //!   ← {"t":"straddle_history","req":"p1",...,"bars":[...]}           one of the last 3 trading days
+//!   → {"op":"oi_profile","req":"o1","underlying":"nse:nifty","expiries":["2026-10-27"]}            now
+//!   → {"op":"oi_profile","req":"o1","underlying":"nse:nifty","expiries":["2026-10-27"],"date":"2026-10-23","band":10,"forward":23480.5}
+//!   ← {"t":"oi_profile","req":"o1","at":ms,"prev_at":ms,"strikes":[...],"call":[...],"put":[...],"call_prev":[...],"put_prev":[...]}
 //!   ← {"t":"q","topic":"quote:nse:nifty",...}   live quote (same bytes for every subscriber)
 //!   ← {"t":"hist","req":"r1","day":"...","src":"kotak","candles":[[ts,o,h,l,c,v],...]}
 //!   ← {"t":"hist_done","req":"r1","ok":N,"failed":M}
@@ -418,8 +421,21 @@ enum Op {
     Universe { req: String },
     StraddleHistory { req: String, underlying: String, expiry: NaiveDate, date: NaiveDate },
     Chain { req: String, underlying: String, expiry: NaiveDate },
-    /// Every strike's call and put OI for these expiries, now and at the previous session's close.
-    OiProfile { req: String, underlying: String, expiries: Vec<NaiveDate> },
+    /// Every strike's call and put OI for these expiries, now and at the previous session's close;
+    /// with `date`, at that day's close and the session's before it (a past session's delta x OI).
+    /// `band` and `forward` narrow a day the per-leg fallback reads (see `oi_profile::OiProfiles::get`);
+    /// without `forward` to center it on, `band` is ignored and the whole chain is read.
+    OiProfile {
+        req: String,
+        underlying: String,
+        expiries: Vec<NaiveDate>,
+        #[serde(default)]
+        date: Option<NaiveDate>,
+        #[serde(default)]
+        band: Option<u32>,
+        #[serde(default)]
+        forward: Option<f64>,
+    },
 }
 
 fn text(v: serde_json::Value) -> Message {
@@ -529,7 +545,7 @@ async fn client(socket: WebSocket, s: AppState, conn: Conn) {
             op @ (Op::Search { .. } | Op::Chain { .. } | Op::Universe { .. }) => {
                 tokio::spawn(instruments_reply(s.clone(), op, ctl.clone()));
             }
-            Op::OiProfile { req, underlying, expiries } => {
+            Op::OiProfile { req, underlying, expiries, date, band, forward } => {
                 let Some(oi) = s.oi.clone() else {
                     let _ = ctl.try_send(text(serde_json::json!({"t": "err", "req": req, "error": "the OI profile needs Nubra"})));
                     continue;
@@ -538,7 +554,7 @@ async fn client(socket: WebSocket, s: AppState, conn: Conn) {
                 // it is not charged against the visitor's history allowance.
                 let ctl = ctl.clone();
                 tokio::spawn(async move {
-                    let reply = match oi.get(&underlying, &expiries).await {
+                    let reply = match oi.get(&underlying, &expiries, date, band, forward).await {
                         Ok(v) => {
                             let mut m = (*v).clone();
                             if let Some(o) = m.as_object_mut() {
