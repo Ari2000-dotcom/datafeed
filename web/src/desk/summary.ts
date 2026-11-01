@@ -22,6 +22,9 @@ export interface Summary {
   last: Bar;
   /** True for today's live session; a past day is not a live reading. */
   live: boolean;
+  /** The day these figures closed on ("Fri, 30 Oct"), when the market is shut and the chart stands
+   *  on the last session traded. Absent while minutes are arriving. */
+  closedOn?: string;
   at: number;
 }
 

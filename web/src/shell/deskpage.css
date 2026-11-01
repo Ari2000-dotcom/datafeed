@@ -1,0 +1,62 @@
+/*
+ * The Desk page (shell/DeskPage.tsx): the live figures over a board of three panels.
+ *
+ * The straddle holds the left at full height; the scrip chart and Delta × OI share the right, one
+ * over the other. The split is 1.6 to 1 rather than even, so the straddle reads as the subject and
+ * the other two as what it is read against — an even split would say all three matter equally.
+ *
+ * Each panel is a plate on the workspace tone, the same plate the Terminal's containers wear
+ * (theme/dock.css), so the two pages are one desk in two arrangements.
+ */
+
+.mh-deskpage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mh-gap);
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--mh-gap);
+}
+
+.mh-deskpage-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--mh-gap);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.mh-deskpage-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.mh-deskpage-cell > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The straddle: the whole left column. */
+.mh-deskpage-main {
+  grid-row: span 2;
+}
+
+/*
+ * A narrow screen has no room for two columns of charts: the board becomes one column in reading
+ * order — the straddle first and tallest, then the scrip chart, then Delta × OI — and the page
+ * scrolls rather than squeezing three panels into a height none of them can draw in.
+ */
+@media (max-width: 1000px) {
+  .mh-deskpage-board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(420px, 1.6fr) minmax(320px, 1fr) minmax(320px, 1fr);
+    flex: 0 0 auto;
+  }
+  .mh-deskpage-main {
+    grid-row: auto;
+  }
+  .mh-deskpage {
+    overflow-y: auto;
+  }
+}

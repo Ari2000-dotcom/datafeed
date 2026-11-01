@@ -235,14 +235,14 @@ input {
   outline-offset: -4px;
   border-radius: var(--mh-radius-small);
 }
-.mh-appbar .mh-ticker {
-  margin-right: 4px;
-}
+/* The one thing that separates two groups on this bar, at one measure: the indices, the feed's
+   state, and the bar's own controls. The feed used to draw a border of its own at a second
+   measure, which left the right of the bar on two rhythms. */
 .mh-appbar-sep {
   flex: none;
   width: 1px;
-  height: 18px;
-  margin: 0 6px;
+  height: 16px;
+  margin: 0 10px;
   background: var(--mh-line-strong);
 }
 
@@ -858,9 +858,8 @@ html[data-resizing="y"] * {
   display: flex;
   align-items: center;
   flex: 0 1 auto;
-  gap: 20px;
+  gap: 18px;
   min-width: 0;
-  margin-right: 16px;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -868,7 +867,7 @@ html[data-resizing="y"] * {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: var(--mh-size-caption);
+  font-size: var(--mh-size-control);
   font-variant-numeric: tabular-nums;
 }
 .mh-ticker-name {
@@ -887,16 +886,15 @@ html[data-resizing="y"] * {
   color: var(--mh-down);
 }
 
-/* The hub's state: a dot and a word, set off by a rule. */
+/* The hub's state: a dot and a word. The rule beside it is the bar's own separator
+   (`.mh-appbar-sep`), so every group on the right of the bar is set off the same way. */
 .mh-feed {
   display: flex;
   align-items: center;
   gap: 7px;
   height: 16px;
-  padding: 0 12px;
-  border-left: 1px solid var(--mh-line-strong);
   color: var(--mh-text-secondary);
-  font-size: var(--mh-size-caption);
+  font-size: var(--mh-size-control);
   white-space: nowrap;
 }
 .mh-dot {
@@ -1825,6 +1823,36 @@ html[data-resizing="y"] * {
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+
+/* A phone has room for the pages or the wordmark, not both: the mark alone still goes home, and
+   the pages close up, so a third page (Desk) never pushes the last one off the bar. */
+@media (max-width: 560px) {
+  .mh-wordmark {
+    display: none;
+  }
+  .mh-appbar-brand {
+    margin-right: 4px;
+  }
+  .mh-appnav-item {
+    padding: 0 6px;
+    font-size: var(--mh-size-control);
+  }
+  .mh-appnav-item[aria-current="page"]::after {
+    left: 6px;
+    right: 6px;
+  }
+  /* The rule between the pages and the tools: the room it takes is worth more than the line. */
+  .mh-appbar-sep {
+    display: none;
+  }
+  /* The feed's dot carries its state on its own; the word it would otherwise say is in its tooltip. */
+  .mh-feed-word {
+    display: none;
+  }
+  .mh-feed {
+    gap: 0;
+  }
 }
 
 /* A phone keeps the readouts' pieces wrapping rather than cut. */

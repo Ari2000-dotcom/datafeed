@@ -13,7 +13,7 @@ import { Ticker } from "./Ticker";
  * open underlined in the accent), and what holds for every page at the right: the indices, the
  * feed's state, the canvas tone and fullscreen. It is the chrome's darkest tone, edge to edge, so the
  * plates of the page under it read as the work and the bar as the frame. A page's own controls
- * live in that page (the chart toolbar on Charts), never here.
+ * live in that page (the chart toolbar on Terminal), never here.
  */
 
 const STATUS_TEXT: Record<HubStatus, string> = {
@@ -58,7 +58,7 @@ export function AppBar({
       <button ref={menuButton} type="button" className="mh-appbar-btn" aria-label="Menu" title="Menu" aria-haspopup="dialog" aria-expanded={menuOpen} onClick={onMenu}>
         <MenuIcon />
       </button>
-      <a className="mh-appbar-brand" href="#/charts" aria-label="AlphaHedge, home">
+      <a className="mh-appbar-brand" href="#/desk" aria-label="AlphaHedge, home">
         <Logo />
         <span className="mh-wordmark">
           Alpha<span className="mh-wordmark-hedge">Hedge</span>
@@ -66,16 +66,18 @@ export function AppBar({
       </a>
       <nav className="mh-appnav" aria-label="Pages">
         {PAGES.map((p) => (
-          <a key={p.id} className="mh-appnav-item" href={p.href} aria-current={page === p.id ? "page" : undefined}>
+          <a key={p.id} className="mh-appnav-item" href={p.href} title={p.title} aria-current={page === p.id ? "page" : undefined}>
             {p.name}
           </a>
         ))}
       </nav>
       <span className="mh-spacer" />
       {hub ? <Ticker hub={hub} /> : null}
-      <span className="mh-feed" title="Connection to the market data feed">
+      <span className="mh-appbar-sep" aria-hidden />
+      {/* On a phone the dot says it alone (styles.css): the word is the first thing the bar can spare. */}
+      <span className="mh-feed" title={`${STATUS_TEXT[status]} · the connection to the market data feed`}>
         <span className={`mh-dot ${STATUS_TONE[status]}`} />
-        {STATUS_TEXT[status]}
+        <span className="mh-feed-word">{STATUS_TEXT[status]}</span>
       </span>
       <span className="mh-appbar-sep" aria-hidden />
       <Dropdown

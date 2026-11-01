@@ -9,6 +9,7 @@ import { applyArrangement, CHART_KINDS, dockKind, isChartKind, loadDesk, replace
 import { ARRANGEMENTS, arrangementOf } from "./shell/arrangements";
 import { AppBar } from "./shell/AppBar";
 import { ChainPage } from "./shell/ChainPage";
+import { DeskPage } from "./shell/DeskPage";
 import { setToolbarSlot, useActivePanel } from "./shell/headerSlot";
 import { LayoutsMenu } from "./shell/WorkspaceMenu";
 import { ToolsBar } from "./shell/ToolsBar";
@@ -22,11 +23,12 @@ import type { SavedWorkspace } from "./core/workspaces";
 
 /*
  * The site: the app bar across the top (the menu, the mark, the pages, and the indices, the feed,
- * the canvas tone and fullscreen), and under it the page that is open. Charts is the desk,
+ * the canvas tone and fullscreen), and under it the page that is open. Terminal is the desk,
  * TradingView's way: the chart toolbar (the active chart's controls, the layout and the saved
  * layouts), the tools bar down the left, the chart grid with the bottom panel and the footer under
  * it, and the side panel with its rail on the right, every region a plate on the workspace tone.
- * Option chain is the chain and Delta × OI side by side.
+ * Option chain is the chain and Delta × OI side by side. Desk is the board the site opens on
+ * (shell/DeskPage.tsx): the same panels, laid out for the reader rather than by them.
  */
 
 /** Which side and bottom panels are open and how big, on this computer. */
@@ -75,7 +77,7 @@ export function App() {
   const [dockApi, setDockApi] = useState<DockviewApi | null>(null);
   // Off the Charts page the desk is not mounted: nothing to act on until it is back.
   useEffect(() => {
-    if (page === "charts") return;
+    if (page === "terminal") return;
     dock.current = null;
     setDockApi(null);
   }, [page]);
@@ -134,9 +136,11 @@ export function App() {
         onFullscreen={toggleFullscreen}
       />
 
+      {page === "desk" && hub ? <DeskPage hub={hub} themeKey={canvas} /> : null}
+
       {page === "chain" && hub ? <ChainPage hub={hub} /> : null}
 
-      {page === "charts" ? (
+      {page === "terminal" ? (
         <div className="mh-desk" data-side={shell.side ? "" : undefined}>
           <header className="mh-toolbar mh-plate">
             <ChartKindPicker api={dockApi} />
@@ -210,7 +214,7 @@ export function App() {
         onClose={closeNav}
         trigger={menuButton}
         hub={hub}
-        api={page === "charts" ? dockApi : null}
+        api={page === "terminal" ? dockApi : null}
         arrangement={arrangement}
         side={shell.side}
         bottom={shell.bottom}

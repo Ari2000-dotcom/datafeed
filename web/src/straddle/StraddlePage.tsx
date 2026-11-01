@@ -377,8 +377,12 @@ export function StraddlePage({
   const viewKey = `${topic}|${pick?.day ?? ""}|${bars.length > 0 ? bars[0]!.t : 0}`;
   // What this chart knows, for the table and details panels (they add no topics of their own).
   const summaryKey = pick ? `${pick.underlying.id}|${pick.expiry}` : "";
+  // Today, live or standing on the last session traded while the market is shut (`closedDay`):
+  // either way the panels that read this have a session to show, and `closedOn` says which it is,
+  // so a closing price is never printed as a live one. A past day picked by hand publishes
+  // nothing: that is one chart's own reading, not what the desk is on.
   useEffect(() => {
-    if (!pick || pick.day !== "live" || closedDay || bars.length === 0) return;
+    if (!pick || pick.day !== "live" || bars.length === 0) return;
     publishSummary({
       key: summaryKey,
       name: pick.underlying.name,
@@ -388,7 +392,8 @@ export function StraddlePage({
       lot: pick.underlying.lot,
       open: bars[0]!,
       last: bars[bars.length - 1]!,
-      live: true,
+      live: !closedDay,
+      closedOn: closedDay ? dayLabel(closedDay) : undefined,
       at: Date.now(),
     });
   }, [bars, pick, summaryKey, closedDay]);

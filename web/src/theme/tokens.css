@@ -196,6 +196,9 @@
   --mh-size-control: 13px;
   --mh-size-body: 14px;
   --mh-size-title: 15px;
+  /* The one figure a board leads with (the Desk's live straddle price): bigger than the title, and
+     regular, because weight on a number is what makes a terminal look home-made. */
+  --mh-size-lead: 19px;
   --mh-size-display: 24px;
   /* TradingView sets its face at its own spacing; the old negative tracking was Inter's. */
   --mh-tracking-auto: normal;

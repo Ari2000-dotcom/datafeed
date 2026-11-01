@@ -1,0 +1,268 @@
+/*
+ * The Desk's line of live figures (shell/LiveBar.tsx), on the page's tokens.
+ *
+ * One line, the height of the Terminal's toolbar, so the two pages share a measure and the board
+ * below keeps the screen. Everything on it sits on one baseline: what is the same kind of thing
+ * reads at the same height all the way across.
+ *
+ * Three measures of space, and they are what groups the line: 5px inside a pair (a label and its
+ * value), 10px between two pairs, and a hairline with 4px either side between the three groups —
+ * what the board is on, what it is worth, and what that is read against. Nothing else separates
+ * anything, so the eye learns the rhythm once.
+ *
+ * Hierarchy is size and ink, never weight. The underlying's name is the only thing here in the
+ * heavier face (the tokens keep that weight for a symbol's name and a panel's title, and off
+ * numbers); the straddle's price leads on size and the strongest ink alone.
+ *
+ * Three tiers of ink and no more — the subject strong, the values primary, the labels and the
+ * furniture quiet. Colour is kept for a direction: a move, or where the price stands against its
+ * average. A figure flashes as it moves (`data-tick`): the straddle washes behind the number, the
+ * rest lift their ink for a moment. It is the dealing-screen tick, not decoration, so it is brief
+ * and it moves nothing.
+ */
+
+.mh-livebar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-height: var(--mh-toolbar-h);
+  padding: 0 12px;
+  border: 1px solid var(--mh-plate-edge);
+  border-radius: var(--mh-dock-radius);
+  background: var(--mh-bg);
+  font-size: var(--mh-size-control);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* The line itself. It is a box of its own so that the two alignments can both hold: baselines
+   line up along the row, and the row as a whole sits in the middle of the bar's height. Hung off
+   the bar directly, a baseline-aligned line is pinned to the top of it, which left a third of the
+   bar empty underneath (user, 2026-11-02). */
+.mh-livebar-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+/* The live dot sits against text, so the line centres it rather than hanging it off the baseline. */
+.mh-livebar .mh-dot {
+  align-self: center;
+}
+.mh-livebar-quiet {
+  color: var(--mh-text-tertiary);
+}
+
+/* -- what the board is on ---------------------------------------------------------------------- */
+
+/* The name and its exchange read as one thing, a word-space apart, so the exchange never looks
+   like a figure of its own. It was a filled chip until 2026-11-02: a badge for a word that is
+   only ever said once, on a line that has no other badge. */
+.mh-livebar-id {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  flex: none;
+}
+.mh-livebar-name {
+  color: var(--mh-text-strong);
+  font-size: var(--mh-size-title);
+  font-weight: var(--mh-weight-strong);
+}
+.mh-livebar-ex {
+  color: var(--mh-text-tertiary);
+  letter-spacing: 0.3px;
+}
+/* The contract: the expiry and its days, the money strike and its tag. The tag leads, the
+   qualifier trails, and both are a tier quieter than the value they belong to. */
+.mh-livebar-meta {
+  color: var(--mh-text-secondary);
+}
+.mh-livebar-meta em,
+.mh-livebar-meta i {
+  color: var(--mh-text-tertiary);
+  font-style: normal;
+}
+.mh-livebar-meta em {
+  margin-left: 4px;
+  text-transform: lowercase;
+}
+.mh-livebar-meta i {
+  margin-right: 5px;
+  font-size: var(--mh-size-caption);
+}
+.mh-livebar-ex[hidden],
+.mh-livebar-meta[hidden] {
+  display: none;
+}
+
+/* A hairline between the three groups, the one thing on the line that separates anything. */
+.mh-livebar-rule {
+  align-self: center;
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--mh-line-strong);
+}
+.mh-livebar-rule[hidden] {
+  display: none;
+}
+
+/* -- the straddle: the page's one large number ------------------------------------------------- */
+
+.mh-livebar-hero {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+}
+/* It leads on size and the strongest ink. Regular, like every other figure on the line: the type
+   tokens keep the heavier weight off numbers, and a bolded price is the first thing that makes a
+   board look home-made. */
+.mh-livebar-hero b {
+  /* The wash sits round the number without moving it: only sideways padding, given back as margin. */
+  margin: 0 -5px;
+  padding: 1px 5px;
+  border-radius: var(--mh-radius-small);
+  color: var(--mh-text-strong);
+  font-size: var(--mh-size-lead);
+  font-weight: var(--mh-weight-regular);
+  line-height: 1;
+}
+
+/* -- the figures --------------------------------------------------------------------------- */
+
+.mh-livebar-figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  flex: none;
+}
+.mh-livebar-figure[hidden],
+.mh-livebar-move[hidden] {
+  display: none;
+}
+/* The label names the figure and then gets out of the way: the quiet ink, a step smaller. */
+.mh-livebar-label {
+  color: var(--mh-text-tertiary);
+  font-size: var(--mh-size-caption);
+}
+/* The figures themselves are what the line is read for, so they take a step more size than the
+   rest of it, and the strongest ink where they have no colour of their own. A figure that is a
+   line on the chart below is written in that line's colour instead, set from the chart's own
+   table (LiveBar.tsx), so the two read as one instrument rather than two. */
+.mh-livebar-value {
+  color: var(--mh-text-strong);
+  font-size: var(--mh-size-body);
+  transition: color var(--mh-dur) var(--mh-ease);
+}
+/* A move: the only place a direction's colour is used on this line. One size for every move, the
+   hero's included, so they read as one kind of figure. */
+.mh-livebar-move {
+  color: var(--mh-text-secondary);
+  font-size: var(--mh-size-control);
+}
+/* Anything bracketed goes in the em, as the chart's legend brackets a move: the percent against
+   the price it belongs to, the gap under VWAP, the vol's points. The brackets are the quietest
+   ink, so the figure inside them is what is read. */
+.mh-livebar-move em {
+  font-style: normal;
+}
+/* Only the hero says the move twice — the points, then the percent in brackets — so only there
+   does the bracket need a space before it. (`:only-child` could not tell the two apart: the
+   points beside it are a text node, not an element.) */
+.mh-livebar-hero .mh-livebar-move em {
+  margin-left: 4px;
+}
+.mh-livebar-move em::before {
+  content: "(";
+  color: var(--mh-text-disabled);
+}
+.mh-livebar-move em::after {
+  content: ")";
+  color: var(--mh-text-disabled);
+}
+
+/* -- the session ------------------------------------------------------------------------------- */
+
+/* Open or shut, the state is said the same way: a dot, then the word, then the day where there is
+   one. The dot carries which — the live green, or the amber the charts give a past session — so
+   the words can stay in the reading ink and the right of the bar never shouts. */
+.mh-livebar-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--mh-text-secondary);
+}
+.mh-livebar-state em {
+  color: var(--mh-text-tertiary);
+  font-style: normal;
+}
+.mh-livebar-closed .mh-dot {
+  background: var(--mh-amber);
+}
+
+/* -- the tick flash ---------------------------------------------------------------------------- */
+
+/* The number that moved washes green or red; a wash, not a border or a size, so nothing shifts. */
+@keyframes mh-tick-up {
+  from {
+    background: color-mix(in srgb, var(--mh-up) 34%, transparent);
+  }
+}
+@keyframes mh-tick-down {
+  from {
+    background: color-mix(in srgb, var(--mh-down) 34%, transparent);
+  }
+}
+.mh-livebar-hero b[data-tick="up"] {
+  animation: mh-tick-up 420ms var(--mh-ease-out);
+}
+.mh-livebar-hero b[data-tick="down"] {
+  animation: mh-tick-down 420ms var(--mh-ease-out);
+}
+
+/* The supporting figures lift their ink instead: the same signal, a quieter voice. */
+@keyframes mh-tick-ink-up {
+  from {
+    color: var(--mh-up);
+  }
+}
+@keyframes mh-tick-ink-down {
+  from {
+    color: var(--mh-down);
+  }
+}
+.mh-livebar-value[data-tick="up"] {
+  animation: mh-tick-ink-up 420ms var(--mh-ease-out);
+}
+.mh-livebar-value[data-tick="down"] {
+  animation: mh-tick-ink-down 420ms var(--mh-ease-out);
+}
+
+/* Asked for no motion: the figures still change, nothing flashes. */
+@media (prefers-reduced-motion: reduce) {
+  .mh-livebar-hero b[data-tick],
+  .mh-livebar-value[data-tick] {
+    animation: none;
+  }
+}
+
+/* A narrow bar closes up before anything gives way; past that the figures drop by rank. Nothing
+   here shrinks: a name cut to "C..." says less than no name at all, so the ladder of ranks is what
+   makes the room. */
+@media (max-width: 720px) {
+  .mh-livebar {
+    padding: 0 8px;
+  }
+  .mh-livebar-row {
+    gap: 8px;
+  }
+  .mh-livebar-rule {
+    margin: 0 2px;
+  }
+}

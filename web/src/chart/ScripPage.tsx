@@ -43,6 +43,7 @@ import { CANDLE_PALETTES, paletteColors, useCandlePalette } from "./candlePalett
 import { CHART_TYPES, isLineType, useChartType, type ScripChartType } from "./chartType";
 import { INDICATORS, useIndicators } from "./indicators";
 import { PanelHeader } from "../shell/headerSlot";
+import { PICK_EVENT, readPick } from "../straddle/StraddlePage";
 
 /**
  * Pick any NSE/BSE index or MCX commodity and an interval: its candles on openalgo-charts, price
@@ -96,12 +97,15 @@ export function ScripPage({
   themeKey,
   initialId,
   initialInterval,
+  follow = false,
   onPick,
 }: Readonly<{
   hub: Hub;
   themeKey: string;
   initialId?: string | null;
   initialInterval?: string;
+  /** Follow the charts' underlying until this chart's own picker is used (the Desk's board). */
+  follow?: boolean;
   onPick?: (pick: ScripPick | null) => void;
 }>) {
   const universe = useUniverse(hub);
@@ -115,6 +119,26 @@ export function ScripPage({
   const [interval, setInterval_] = useState(
     initialInterval && CANDLE_INTERVALS.some((c) => c.value === initialInterval) ? initialInterval : DEFAULT_INTERVAL,
   );
+
+  // On the Desk's board this chart follows the straddle's underlying, so the three panels are one
+  // instrument read three ways — until this chart's own picker is used, which makes it its own, the
+  // way an option panel's pick works (`useFollowedPick`). In the Terminal each chart is its own
+  // from the start.
+  const own = useRef(!follow);
+  const pickOwn = (next: string) => {
+    own.current = true;
+    setId(next);
+  };
+  useEffect(() => {
+    if (!follow) return;
+    const followed = () => {
+      if (own.current) return;
+      const picked = readPick();
+      if (picked) setId(picked.underlying.id);
+    };
+    window.addEventListener(PICK_EVENT, followed);
+    return () => window.removeEventListener(PICK_EVENT, followed);
+  }, [follow]);
 
   useEffect(() => {
     const u = underlyingOf.get(id);
@@ -265,7 +289,7 @@ export function ScripPage({
 
   const quickPick = (name: string) => {
     const u = universe.find((x) => x.name === name);
-    if (u) setId(u.id);
+    if (u) pickOwn(u.id);
   };
 
   return (
@@ -276,7 +300,7 @@ export function ScripPage({
             label="Underlying"
             caption={false}
             value={id}
-            onChange={setId}
+            onChange={pickOwn}
             renderValue={(o) =>
               o ? (
                 <>
