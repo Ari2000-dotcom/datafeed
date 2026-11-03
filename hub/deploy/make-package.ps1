@@ -29,12 +29,13 @@ Copy-Item "$hub\config.toml", "$hub\Cargo.toml", "$hub\Cargo.lock" "$out\hub"
 Copy-Item "$hub\src" "$out\hub\src" -Recurse
 Copy-Item $PSScriptRoot "$out\hub\deploy" -Recurse
 
-# The web app (build it first: cd web; npm run build), served by Caddy from web\.
-$dist = Join-Path $proj 'web\dist'
+# The website (build it first: cd frontend; npm run build), served by Caddy from web\ on the VPS.
+# It is the new frontend; the old app in web\ is no longer what the site serves.
+$dist = Join-Path $proj 'frontend\dist'
 if (Test-Path "$dist\index.html") {
     Copy-Item $dist "$out\web" -Recurse
 } else {
-    Write-Warning "web\dist is missing: run 'npm run build' in the web folder first"
+    throw "frontend\dist is missing: run 'npm run build' in the frontend folder first"
 }
 Set-Content -Path "$out\domain.txt" -Encoding ASCII -Value (@(
     '# Your DuckDNS name, on the line below without the #, e.g.:',

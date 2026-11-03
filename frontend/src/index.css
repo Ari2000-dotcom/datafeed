@@ -1,0 +1,346 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Inter, the hinted web build (Inter 3.19, ttfautohint): its glyphs carry TrueType instructions, so on
+ * Windows the stems land on whole pixel rows and advances are whole pixels. The variable build and the
+ * Google Fonts files have no instructions and render soft there. Regular, medium and semibold only:
+ * the page uses nothing else, and each file is about 36 KB.
+ */
+@font-face {
+    font-family: "Inter Hinted";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("./assets/fonts/inter-hinted-400.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter Hinted";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("./assets/fonts/inter-hinted-500.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter Hinted";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("./assets/fonts/inter-hinted-600.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter Hinted";
+    font-style: italic;
+    font-weight: 600;
+    font-display: swap;
+    src: url("./assets/fonts/inter-hinted-600-italic.woff2") format("woff2");
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    /* One family. `.num` turns on Inter's tabular figures. */
+    --font-sans: "Inter Hinted", "Segoe UI", system-ui, sans-serif;
+    --font-heading: var(--font-sans);
+
+    /* A dense scale: broker screens set data at 12 and 13 px and keep every title modest. */
+    --text-xs: 12px;
+    --text-xs--line-height: 16px;
+    --text-sm: 13px;
+    --text-sm--line-height: 20px;
+    --text-base: 14px;
+    --text-base--line-height: 20px;
+    --text-lg: 16px;
+    --text-lg--line-height: 24px;
+    --text-xl: 20px;
+    --text-xl--line-height: 28px;
+    --text-2xl: 24px;
+    --text-2xl--line-height: 32px;
+
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    /* Third step of ink: captions, units, anything that must not compete. */
+    --color-subtle: var(--subtle);
+    /* Controls' ink: between a value and a label, so a toolbar reads clearly without competing with the data. */
+    --color-soft: var(--soft);
+    /* Nav bar, strip, toolbars and screen headers: the chrome tone, a step off the workspace. */
+    --color-chrome: var(--chrome);
+    /* The toolbar and footer of a chart container: TradingView's black, over its own canvas. */
+    --color-chart-toolbar: var(--chart-toolbar);
+    /* QuantDesk's segmented control: a grey track and a lighter pill on the chosen one. */
+    --color-seg-track: var(--seg-track);
+    --color-seg-pill: var(--seg-pill);
+    --color-seg-text: var(--seg-text);
+    --color-seg-hover: var(--seg-hover);
+    --color-seg-active: var(--seg-active);
+    /* The canvas a chart is drawn on: a step lighter than a panel, so the chart reads as the thing on the page. */
+    --color-chart: var(--chart);
+    /* A move up or down. Used for moves and nothing else. */
+    --color-up: var(--up);
+    --color-down: var(--down);
+
+    /* Whole pixels, so a corner is as crisp as a line. */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-2xl: 16px;
+}
+
+/*
+ * Dark is QuantDesk's palette, which is Zerodha Kite's: neutral gray-black with no tint anywhere, the
+ * chart canvas included. A lighter grey workspace (#272727) frames every plate; the plates and the
+ * chart canvas are the deeper #181818; the chrome (nav bar, strip, toolbars) is #242424. Text steps
+ * down in four bands, each above 4.5:1. The nav bar, strip and chart toolbars share a warm black
+ * (#1c1b19: a mix of grey and black, easy on the eyes, never #000) over a brighter warm-grey chart canvas
+ * (#2a2927). The earlier TradingView navy (#151924) read violet and was dropped; the candles are brighter too.
+ * Borders are opaque: a translucent 1px line lands on a different colour over each surface.
+ */
+/* Light is the same structure, flipped. Declared first so .dark, equal in specificity, wins on <html>. */
+:root {
+    --background: oklch(0.972 0.003 255);
+    --foreground: oklch(0.2 0.012 255);
+    --card: oklch(0.995 0.001 255);
+    --card-foreground: oklch(0.2 0.012 255);
+    --popover: oklch(0.995 0.001 255);
+    --popover-foreground: oklch(0.2 0.012 255);
+    --primary: oklch(0.52 0.17 255);
+    --primary-foreground: oklch(0.99 0.004 255);
+    --secondary: oklch(0.945 0.004 255);
+    --secondary-foreground: oklch(0.2 0.012 255);
+    --muted: oklch(0.95 0.004 255);
+    --muted-foreground: oklch(0.45 0.013 255);
+    --subtle: oklch(0.55 0.012 255);
+    --soft: oklch(0.3 0.012 255);
+    --accent: oklch(0.93 0.005 255);
+    --accent-foreground: oklch(0.2 0.012 255);
+    --destructive: oklch(0.55 0.2 25);
+    --border: oklch(0.9 0.005 255);
+    --input: oklch(0.85 0.007 255);
+    --ring: oklch(0.52 0.17 255);
+    --chrome: oklch(0.99 0.002 255);
+    --seg-track: #c9d0d8;
+    --seg-pill: #2b3139;
+    --seg-text: #262c33;
+    --seg-hover: #15191e;
+    --seg-active: #f5f7fa;
+    --chart-toolbar: #ffffff;
+    --chart: #ffffff;
+    --chart-grid: #f0f3fa;
+    --chart-text: #131722;
+    --chart-muted: #6a6d78;
+    --chart-legend: #6a6d78;
+    --chart-legend-title: #4a4d57;
+    --chart-axis: #6a6d78;
+    --chart-border: #e0e3eb;
+    --chart-surface: #e0e3eb;
+    --chart-up: #089981;
+    --chart-down: #f23645;
+    --chart-accent: #2962ff;
+    --chart-oi-call: #2e8b57;
+    --chart-oi-put: #c0505a;
+    --up: oklch(0.5 0.15 155);
+    --down: oklch(0.55 0.2 25);
+    --radius: 0.375rem;
+}
+
+.dark {
+    --background: #222120;
+    --foreground: #f3f1ed;
+    --card: #1a1917;
+    --card-foreground: #f3f1ed;
+    --popover: #2c2b29;
+    --popover-foreground: #f3f1ed;
+    --primary: #2997ff;
+    --primary-foreground: oklch(0.16 0.02 252);
+    --secondary: #302f2c;
+    --secondary-foreground: #f3f1ed;
+    --muted: #2f2e2b;
+    /* Three clear steps of ink: values #f3f1ed, labels #a9a59f, notes #86837d (4.6:1 on a panel). */
+    --muted-foreground: #a9a59f;
+    --subtle: #86837d;
+    --soft: #d6d3cd;
+    --accent: #383633;
+    --accent-foreground: #f3f1ed;
+    --destructive: #f2615d;
+    --border: #383633;
+    --input: #46443f;
+    --ring: #2997ff;
+    --chrome: #1c1b19;
+    --seg-track: rgb(128 124 118 / 24%);
+    --seg-pill: #666360;
+    --seg-text: #a3a09b;
+    --seg-hover: #e8e6e1;
+    --seg-active: #f5f3ef;
+    /* A soft neutral black for the canvas, QuantDesk's #181818 a step lighter so it is never harsh, under a deeper black toolbar. */
+    --chart-toolbar: #121212;
+    --chart: #1b1b1b;
+    --chart-grid: #262626;
+    --chart-text: #e8e8e8;
+    --chart-muted: #b4b4b6;
+    /* The status line's names and labels (title, O H L C): a soft grey a step under the axis text, never bright. */
+    --chart-legend: #9b9ba0;
+    /* The chart's name in its status line, a touch lighter than the labels after it. */
+    --chart-legend-title: #b8b8bc;
+    --chart-axis: #c2c2c4;
+    --chart-border: #303030;
+    --chart-surface: #3d3d3f;
+    --chart-up: #0ecb81;
+    --chart-down: #f6465d;
+    --chart-accent: #4c8dff;
+    /* QuantDesk's open-interest bars: soft green and red, not the candles' */
+    --chart-oi-call: #22c55e;
+    --chart-oi-put: #ef4444;
+    --up: #0ecb81;
+    --down: #f6465d;
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    /*
+     * Sharp text. Windows draws text through DirectWrite and gives it ClearType edges only on an
+     * opaque, unmoved layer, so no text container here blurs, fades or transforms, every scrolling area
+     * has an opaque background (Chrome drops to grey antialiasing on a transparent scroller), and every
+     * size and line height is a whole pixel. The font is Inter's hinted build, declared above.
+     */
+    html {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        text-rendering: optimizeLegibility;
+        font-synthesis: none;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        color-scheme: dark;
+    }
+    html.light {
+        color-scheme: light;
+    }
+    body {
+        @apply bg-background text-foreground;
+        font-size: 13px;
+        line-height: 20px;
+        font-weight: 400;
+        margin: 0;
+        overflow: hidden;
+    }
+    h1,
+    h2,
+    h3 {
+        font-weight: 600;
+        letter-spacing: -0.011em;
+    }
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"]),
+    [role="tab"],
+    a[href] {
+        cursor: pointer;
+    }
+    ::selection {
+        background: color-mix(in oklch, var(--primary) 35%, transparent);
+    }
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--input) transparent;
+    }
+}
+
+/* A chart toolbar's "more" button stands in for the price scale and the camera once they have given way (useFitRow). */
+.chart-bar [data-more] {
+    display: none;
+}
+.chart-bar:has([data-drop="3"][hidden]) [data-more] {
+    display: inline-flex;
+}
+
+/*
+ * The type scale. Every piece of text takes one of these roles, so its size, weight and ink say how
+ * much it matters, and nothing else does. Weight is used sparingly: a screen's title is the only
+ * semibold, the one key figure and section heads are medium, everything else is regular and is
+ * told apart by size and ink. Body text is the 13px set on body.
+ *   display  22  the one figure a card is about (an index's price)
+ *   title    16  a screen's name
+ *   heading  14  a section of a screen
+ *   figure   15  a figure in a panel's row of figures; figure-lg 18 where the row is the panel's point
+ *   label    12  regular, second ink: what a figure or a column is
+ *   meta     12  regular, third ink: units, notes, dates, counts
+ */
+@utility type-display {
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 500;
+    letter-spacing: -0.012em;
+    font-variant-numeric: tabular-nums;
+}
+@utility type-title {
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+    letter-spacing: -0.006em;
+}
+@utility type-heading {
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+}
+@utility type-figure {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+@utility type-figure-lg {
+    font-size: 18px;
+    line-height: 24px;
+    font-weight: 500;
+    letter-spacing: -0.006em;
+    font-variant-numeric: tabular-nums;
+}
+@utility type-label {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+    color: var(--muted-foreground);
+}
+@utility type-meta {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+    color: var(--subtle);
+}
+
+/* Figures: Inter's tabular digits, so a column of prices lines up on the decimal point. */
+@utility num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "cv05" 1;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
