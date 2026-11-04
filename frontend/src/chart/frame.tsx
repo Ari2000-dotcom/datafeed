@@ -1,8 +1,25 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react"
 
-import { AlertIcon, FullscreenOffIcon, FullscreenOnIcon } from "@/components/icons"
+import {
+  AlertIcon,
+  FullscreenOffIcon,
+  FullscreenOnIcon,
+} from "@/components/icons"
+import { FolderTab } from "@/components/app/folder"
 import { Tip, ToolButton } from "@/components/app/toolbar"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFitRow } from "@/lib/fit-row"
 import { cn } from "@/lib/utils"
@@ -23,10 +40,19 @@ export function useFullscreen<T extends HTMLElement>() {
   return { ref, full, toggle }
 }
 
-export function FullscreenButton({ full, onToggle }: { full: boolean; onToggle: () => void }) {
+export function FullscreenButton({
+  full,
+  onToggle,
+}: {
+  full: boolean
+  onToggle: () => void
+}) {
   return (
     <Tip label={full ? "Exit full screen" : "Full screen"}>
-      <ToolButton aria-label={full ? "Exit full screen" : "Full screen"} onClick={onToggle}>
+      <ToolButton
+        aria-label={full ? "Exit full screen" : "Full screen"}
+        onClick={onToggle}
+      >
         {full ? <FullscreenOffIcon /> : <FullscreenOnIcon />}
       </ToolButton>
     </Tip>
@@ -65,7 +91,9 @@ export function ChartFrame({
   footer?: ReactNode
   legend?: ReactNode
   host: RefObject<HTMLDivElement | null>
-  state?: { kind: "loading" } | { kind: "message"; title: string; description: string }
+  state?:
+    | { kind: "loading" }
+    | { kind: "message"; title: string; description: string }
   active?: boolean
   onActivate?: () => void
   children?: ReactNode
@@ -75,22 +103,30 @@ export function ChartFrame({
   const fitBar = useFitRow()
 
   return (
+    // QuantDesk's container: a folder tab with the container's name over the plate, both framed in
+    // indigo while active. Full screen takes the plate alone.
+    <div
+      className={cn("flex min-h-0 min-w-0 flex-1 flex-col", className)}
+      onPointerDownCapture={onActivate}
+    >
+    <FolderTab title={label} active={active} />
     <section
       ref={frame}
       aria-label={label}
       data-active={active || undefined}
       onPointerDownCapture={onActivate}
       onFocusCapture={onActivate}
-      className={cn(
-        "@container/chart flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-chart transition-colors",
-        active ? "border-primary ring-1 ring-primary/60" : "hover:border-input",
-        className,
-      )}
+      className="@container/chart flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden panel rounded-tl-none bg-chart"
     >
       {/* One row, always: pieces marked data-drop give way as the container narrows (useFitRow), and what is still too wide is clipped, never wrapped. */}
-      <div ref={fitBar} className="chart-bar flex h-[38px] shrink-0 items-center gap-x-3 overflow-hidden border-b bg-chart-toolbar px-1.5">
+      <div
+        ref={fitBar}
+        className="chart-bar panel-head flex h-[38px] shrink-0 items-center gap-x-3 overflow-hidden bg-chart-toolbar px-1.5"
+      >
         {/* At the narrowest the lead clips, not the tools on the right: those (more, full screen) are never cut off. */}
-        <div className="flex min-w-0 items-center gap-x-0.5 overflow-hidden">{toolbar}</div>
+        <div className="flex min-w-0 items-center gap-x-0.5 overflow-hidden">
+          {toolbar}
+        </div>
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {tools}
           <FullscreenButton full={full} onToggle={toggle} />
@@ -99,12 +135,20 @@ export function ChartFrame({
       {header}
       <div className="relative min-h-0 flex-1 bg-chart">
         <div ref={host} className="absolute inset-0" />
-        {legend ? <div className="pointer-events-none absolute top-2.5 left-3 flex max-w-[calc(100%-6rem)] flex-col gap-0.5 text-xs">{legend}</div> : null}
+        {legend ? (
+          <div className="pointer-events-none absolute top-2.5 left-3 flex max-w-[calc(100%-6rem)] flex-col gap-0.5 text-xs">
+            {legend}
+          </div>
+        ) : null}
         {children}
         {state ? (
           <div className="absolute inset-0 flex bg-chart">
             {state.kind === "loading" ? (
-              <div className="flex w-full flex-col gap-3 p-6" aria-busy="true" aria-label="Loading chart">
+              <div
+                className="flex w-full flex-col gap-3 p-6"
+                aria-busy="true"
+                aria-label="Loading chart"
+              >
                 <Skeleton className="h-4 w-48" />
                 <Skeleton className="w-full flex-1" />
               </div>
@@ -122,7 +166,12 @@ export function ChartFrame({
           </div>
         ) : null}
       </div>
-      {footer ? <div className="flex h-7 shrink-0 items-center gap-0.5 border-t bg-chart-toolbar px-1.5 text-xs">{footer}</div> : null}
+      {footer ? (
+        <div className="flex h-7 shrink-0 items-center gap-0.5 border-t bg-chart-toolbar px-1.5 text-xs">
+          {footer}
+        </div>
+      ) : null}
     </section>
+    </div>
   )
 }

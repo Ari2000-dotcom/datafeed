@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { PaneLegend, type LegendValue, type LinePoint, type SeriesApi, type Whitespace } from "openalgo-charts"
+import {
+  PaneLegend,
+  type LegendValue,
+  type LinePoint,
+  type SeriesApi,
+  type Whitespace,
+} from "openalgo-charts"
 
 import { Move } from "@/components/app/move"
 import { ChartFrame } from "@/chart/frame"
@@ -8,8 +14,22 @@ import { useChart } from "@/chart/use-chart"
 import { Tip, ToolButton, ToolDivider } from "@/components/app/toolbar"
 import { ChevronDownIcon } from "@/components/icons"
 import { LivePulse } from "@/chart/live-pulse"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { dateLabel, daysTo, fmt0, fmt2, istDate, pastWeekdays, sessionLabel } from "@/lib/format"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  dateLabel,
+  daysTo,
+  fmt0,
+  fmt2,
+  istDate,
+  pastWeekdays,
+  sessionLabel,
+} from "@/lib/format"
 import { hub, type TopicMessage } from "@/lib/hub"
 import { useHubStatus } from "@/lib/use-hub"
 
@@ -43,7 +63,8 @@ const LINE = {
   vix: "#3be0d3",
 } as const
 
-type Key = "straddle" | "vwap" | "call" | "put" | "synth" | "spot" | "iv" | "vix"
+type Key =
+  "straddle" | "vwap" | "call" | "put" | "synth" | "spot" | "iv" | "vix"
 type Pick = (b: StraddleBar) => number | null
 
 /** A #rrggbb colour at a strength, as the web build fades the lines that are context, not the read. */
@@ -67,7 +88,11 @@ const SPOT_BAND = 0.8
 const SPOT_MIN_SPAN = 0.0005
 
 /** Pins the right scale so spot and the synthetic future sit centred on the minutes in view. */
-function fitSpot(scale: ReturnType<SeriesApi["priceScale"]>, all: readonly StraddleBar[], view: { from: number; to: number }) {
+function fitSpot(
+  scale: ReturnType<SeriesApi["priceScale"]>,
+  all: readonly StraddleBar[],
+  view: { from: number; to: number }
+) {
   const from = Math.max(0, Math.floor(view.from))
   const to = Math.min(all.length - 1, Math.ceil(view.to))
   let lo = Infinity
@@ -89,14 +114,25 @@ function fitSpot(scale: ReturnType<SeriesApi["priceScale"]>, all: readonly Strad
 
 const PAST = pastWeekdays(3)
 
-const point = (b: StraddleBar, value: number | null): LinePoint | Whitespace => (value === null ? { time: b.t / 1000 } : { time: b.t / 1000, value })
+const point = (b: StraddleBar, value: number | null): LinePoint | Whitespace =>
+  value === null ? { time: b.t / 1000 } : { time: b.t / 1000, value }
 
-function Stat({ label, value, sub, hint }: { label: string; value: React.ReactNode; sub?: React.ReactNode; hint?: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+  hint,
+}: {
+  label: string
+  value: React.ReactNode
+  sub?: React.ReactNode
+  hint?: string
+}) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 px-3 py-2" title={hint}>
-      <span className="type-label truncate">{label}</span>
-      <span className="type-figure truncate">{value}</span>
-      <span className="type-meta h-4 truncate">{sub}</span>
+      <span className="truncate type-label">{label}</span>
+      <span className="truncate type-figure">{value}</span>
+      <span className="h-4 truncate type-meta">{sub}</span>
     </div>
   )
 }
@@ -123,7 +159,10 @@ const VOL_PANE_H = 110
 const STATS_FROM = 380
 
 /** The minute at or before `t` (ms) in a list in time order, by bisection. */
-function barAt(list: readonly StraddleBar[], t: number): StraddleBar | undefined {
+function barAt(
+  list: readonly StraddleBar[],
+  t: number
+): StraddleBar | undefined {
   let lo = 0
   let hi = list.length - 1
   if (hi < 0 || list[0]!.t > t) return list[0]
@@ -164,13 +203,23 @@ export function StraddleChart({
   // A short container drops what does not fit: first the figures row, then the vol pane under the straddle.
   const frameHeight = useFrameHeight(host)
   const showStats = frameHeight === 0 || frameHeight >= STATS_FROM
-  const roomForVol = frameHeight === 0 || frameHeight - TOOLBAR_H - (showStats ? STATS_H : 0) - MAIN_PANE_H >= VOL_PANE_H
+  const roomForVol =
+    frameHeight === 0 ||
+    frameHeight - TOOLBAR_H - (showStats ? STATS_H : 0) - MAIN_PANE_H >=
+      VOL_PANE_H
   const [session, setSession] = useState<string>("today")
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready" } | { kind: "empty"; note: string }>({ kind: "loading" })
+  // Before today's session has a bar, the chart opens on the last session traded instead of an empty
+  // "today"; once per container, so picking Today again later is respected.
+  const fellBack = useRef(false)
+  const [state, setState] = useState<
+    { kind: "loading" } | { kind: "ready" } | { kind: "empty"; note: string }
+  >({ kind: "loading" })
   const [version, setVersion] = useState(0)
   const [last, setLast] = useState<StraddleBar | null>(null)
   const [legs, setLegs] = useState<string[]>([])
-  const [paging, setPaging] = useState<{ kind: "idle" } | { kind: "loading"; day: string } | { kind: "done" }>({ kind: "idle" })
+  const [paging, setPaging] = useState<
+    { kind: "idle" } | { kind: "loading"; day: string } | { kind: "done" }
+  >({ kind: "idle" })
   /** The session picked, in time order. */
   const bars = useRef<StraddleBar[]>([])
   /** Earlier sessions paged in by panning back, in time order, all before `bars`. */
@@ -205,53 +254,72 @@ export function StraddleChart({
     const take = (list: StraddleBar[], note: string) => {
       bars.current = [...list].sort((a, b) => a.t - b.t)
       setLast(bars.current.at(-1) ?? null)
-      setState(bars.current.length > 0 ? { kind: "ready" } : { kind: "empty", note })
+      setState(
+        bars.current.length > 0 ? { kind: "ready" } : { kind: "empty", note }
+      )
       setVersion((v) => v + 1)
     }
 
     if (session !== "today") {
       let cancelled = false
-      hub.request<{ bars: StraddleBar[] }>({ op: "straddle_history", underlying, expiry, date: session }, "straddle_history").then(
-        (r) => !cancelled && take(r.bars, "The hub keeps no straddle for that day."),
-        (e: unknown) =>
-          !cancelled &&
-          setState({
-            kind: "empty",
-            note: e instanceof Error ? e.message : "Could not load that session.",
-          })
-      )
+      hub
+        .request<{ bars: StraddleBar[] }>(
+          { op: "straddle_history", underlying, expiry, date: session },
+          "straddle_history"
+        )
+        .then(
+          (r) =>
+            !cancelled &&
+            take(r.bars, "The hub keeps no straddle for that day."),
+          (e: unknown) =>
+            !cancelled &&
+            setState({
+              kind: "empty",
+              note:
+                e instanceof Error ? e.message : "Could not load that session.",
+            })
+        )
       return () => {
         cancelled = true
       }
     }
 
-    return hub.listen(`straddle:${underlying}:${expiry}`, (msg: TopicMessage) => {
-      if (msg.t === "straddle_snapshot") {
-        const backfill = String(msg.backfill ?? "")
-        take(
-          (msg.bars as StraddleBar[]) ?? [],
-          backfill === "loading"
-            ? "The hub is still building today's session."
-            : backfill.startsWith("failed")
-              ? backfill
-              : "No straddle yet for today: the market has not opened or the feed has not started."
-        )
-      } else if (msg.t === "straddle") {
-        const bar = msg.bar as StraddleBar
-        const prev = msg.prev as StraddleBar | null
-        const list = bars.current
-        for (const b of prev ? [prev, bar] : [bar]) {
-          const tail = list.at(-1)
-          if (tail && tail.t === b.t) list[list.length - 1] = b
-          else if (!tail || b.t > tail.t) list.push(b)
-          apply(b)
+    return hub.listen(
+      `straddle:${underlying}:${expiry}`,
+      (msg: TopicMessage) => {
+        if (msg.t === "straddle_snapshot") {
+          const backfill = String(msg.backfill ?? "")
+          const empty = ((msg.bars as StraddleBar[] | undefined) ?? []).length === 0
+          if (empty && backfill !== "loading" && !fellBack.current && PAST[0]) {
+            fellBack.current = true
+            setSession(PAST[0])
+            return
+          }
+          take(
+            (msg.bars as StraddleBar[]) ?? [],
+            backfill === "loading"
+              ? "The hub is still building today's session."
+              : backfill.startsWith("failed")
+                ? backfill
+                : "No straddle yet for today: the market has not opened or the feed has not started."
+          )
+        } else if (msg.t === "straddle") {
+          const bar = msg.bar as StraddleBar
+          const prev = msg.prev as StraddleBar | null
+          const list = bars.current
+          for (const b of prev ? [prev, bar] : [bar]) {
+            const tail = list.at(-1)
+            if (tail && tail.t === b.t) list[list.length - 1] = b
+            else if (!tail || b.t > tail.t) list.push(b)
+            apply(b)
+          }
+          if (!hovering.current) paintLast.current?.(bar)
+          refitRef.current?.()
+          setLast(bar)
+          setState((s) => (s.kind === "ready" ? s : { kind: "ready" }))
         }
-        if (!hovering.current) paintLast.current?.(bar)
-        refitRef.current?.()
-        setLast(bar)
-        setState((s) => (s.kind === "ready" ? s : { kind: "ready" }))
       }
-    })
+    )
   }, [underlying, expiry, session, status, apply])
 
   // The series, rebuilt when a snapshot lands, the palette changes or a leg is toggled.
@@ -262,11 +330,26 @@ export function StraddleChart({
     // As the web build sets each line: its name in the box beside its axis tag, TradingView's dotted
     // rule across the plot for the lines the desk reads, the tag kept on the axis when scrolled back,
     // and only the VWAP broken between sessions (it restarts each day; the others carry on).
-    const add = (key: Key, pane: number, side: "left" | "right", color: string, pick: Pick, look: { width?: number; tag?: string; priceLine?: boolean; pct?: boolean } = {}) => {
+    const add = (
+      key: Key,
+      pane: number,
+      side: "left" | "right",
+      color: string,
+      pick: Pick,
+      look: {
+        width?: number
+        tag?: string
+        priceLine?: boolean
+        pct?: boolean
+      } = {}
+    ) => {
       const s = chart.addSeries("line", {
         paneIndex: pane,
         priceScaleId: side,
-        priceFormat: { type: "custom", formatter: look.pct ? (v: number) => `${v.toFixed(2)}%` : fmt2 },
+        priceFormat: {
+          type: "custom",
+          formatter: look.pct ? (v: number) => `${v.toFixed(2)}%` : fmt2,
+        },
         style: {
           color,
           lineWidth: look.width ?? 2,
@@ -283,43 +366,100 @@ export function StraddleChart({
     }
     lines.current = {}
     // Added back to front, the premium last so it draws on top.
-    add("synth", 0, "right", tint(LINE.synth, CONTEXT_ALPHA), (b) => b.synth, { width: 1, tag: "Syn fut", priceLine: true })
-    add("spot", 0, "right", tint(LINE.spot, CONTEXT_ALPHA), (b) => b.spot, { width: 1, tag: "Spot" })
-    add("vwap", 0, "left", tint(LINE.vwap, VWAP_ALPHA), (b) => b.vwap, { width: 1, tag: "VWAP" })
-    if (legs.includes("call")) add("call", 0, "left", colors.up, (b) => b.call, { width: 1, tag: "Call" })
-    if (legs.includes("put")) add("put", 0, "left", colors.down, (b) => b.put, { width: 1, tag: "Put" })
-    add("straddle", 0, "left", LINE.straddle, (b) => b.straddle, { tag: "Straddle", priceLine: true })
+    add("synth", 0, "right", tint(LINE.synth, CONTEXT_ALPHA), (b) => b.synth, {
+      width: 1,
+      tag: "Syn fut",
+      priceLine: true,
+    })
+    add("spot", 0, "right", tint(LINE.spot, CONTEXT_ALPHA), (b) => b.spot, {
+      width: 1,
+      tag: "Spot",
+    })
+    add("vwap", 0, "left", tint(LINE.vwap, VWAP_ALPHA), (b) => b.vwap, {
+      width: 1,
+      tag: "VWAP",
+    })
+    if (legs.includes("call"))
+      add("call", 0, "left", colors.up, (b) => b.call, {
+        width: 1,
+        tag: "Call",
+      })
+    if (legs.includes("put"))
+      add("put", 0, "left", colors.down, (b) => b.put, { width: 1, tag: "Put" })
+    add("straddle", 0, "left", LINE.straddle, (b) => b.straddle, {
+      tag: "Straddle",
+      priceLine: true,
+    })
 
     const hasIv = list.some((b) => b.iv !== null)
     const hasVix = list.some((b) => b.vix !== null)
     const volPane = roomForVol && (hasIv || hasVix) ? 1 : -1
     if (volPane > 0) {
-      if (hasVix) add("vix", volPane, "left", LINE.vix, (b) => b.vix, { tag: "VIX" })
-      if (hasIv) add("iv", volPane, "right", LINE.iv, (b) => b.iv, { tag: "IV", priceLine: true, pct: true })
+      if (hasVix)
+        add("vix", volPane, "left", LINE.vix, (b) => b.vix, { tag: "VIX" })
+      if (hasIv)
+        add("iv", volPane, "right", LINE.iv, (b) => b.iv, {
+          tag: "IV",
+          priceLine: true,
+          pct: true,
+        })
       chart.setPaneWeight(0, 2)
       chart.setPaneWeight(volPane, 1)
     }
 
     // TradingView's status line: the chart's name, then each line's reading in its colour.
     const legends: PaneLegend[] = []
-    const mk = (pane: number, opts: ConstructorParameters<typeof PaneLegend>[0]) => {
+    const mk = (
+      pane: number,
+      opts: ConstructorParameters<typeof PaneLegend>[0]
+    ) => {
       const l = new PaneLegend({ font: 12, actions: [], ...opts })
       chart.addPrimitive(l, pane)
       legends.push(l)
       return l
     }
     // TradingView's status line: the name at 14px with the premium's readings after it on the same line.
-    const head = mk(0, { id: "straddle", title: `${name.toUpperCase()} STRADDLE${expiry ? ` · ${dateLabel(expiry).toUpperCase()}` : ""}`, row: 0, titleFont: 14 })
-    const under = mk(0, { id: "spot-values", title: "", row: 1, statusLine: { title: false } })
-    const vol = volPane > 0 && hasIv ? mk(volPane, { id: "iv", title: "ATM IV", color: LINE.iv, row: 0 }) : null
-    const vix = volPane > 0 && hasVix ? mk(volPane, { id: "vix", title: "India VIX", color: LINE.vix, row: hasIv ? 1 : 0 }) : null
+    const head = mk(0, {
+      id: "straddle",
+      title: `${name} straddle`,
+      params: expiry ? dateLabel(expiry) : undefined,
+      row: 0,
+      titleFont: 14,
+      statusLine: { background: true, backgroundColor: colors.ground, backgroundOpacity: 0.86 },
+    })
+    const under = mk(0, {
+      id: "spot-values",
+      title: "",
+      row: 1,
+      statusLine: { title: false },
+    })
+    const vol =
+      volPane > 0 && hasIv
+        ? mk(volPane, { id: "iv", title: "ATM IV", color: LINE.iv, row: 0 })
+        : null
+    const vix =
+      volPane > 0 && hasVix
+        ? mk(volPane, {
+            id: "vix",
+            title: "India VIX",
+            color: LINE.vix,
+            row: hasIv ? 1 : 0,
+          })
+        : null
 
     // The live end of the premium line: a dot with rings drizzling out while the feed is sending.
     const pulses: LivePulse[] = []
     if (session === "today") {
       const p = new LivePulse(() => {
         const b = bars.current.at(-1)
-        return b ? { time: b.t / 1000, value: b.straddle, colour: LINE.straddle, live: Date.now() - b.t < 180_000 } : null
+        return b
+          ? {
+              time: b.t / 1000,
+              value: b.straddle,
+              colour: LINE.straddle,
+              live: Date.now() - b.t < 180_000,
+            }
+          : null
       })
       chart.addPrimitive(p, 0)
       pulses.push(p)
@@ -327,17 +467,27 @@ export function StraddleChart({
     const paint = (b: StraddleBar) => {
       const values: LegendValue[] = [
         { label: "Straddle", text: fmt2(b.straddle), color: LINE.straddle },
-        { label: "VWAP", text: b.vwap !== null ? fmt2(b.vwap) : "-", color: LINE.vwap },
+        {
+          label: "VWAP",
+          text: b.vwap !== null ? fmt2(b.vwap) : "-",
+          color: LINE.vwap,
+        },
       ]
-      if (legs.includes("call")) values.push({ label: "Call", text: fmt2(b.call), color: colors.up })
-      if (legs.includes("put")) values.push({ label: "Put", text: fmt2(b.put), color: colors.down })
+      if (legs.includes("call"))
+        values.push({ label: "Call", text: fmt2(b.call), color: colors.up })
+      if (legs.includes("put"))
+        values.push({ label: "Put", text: fmt2(b.put), color: colors.down })
       head.setValues(values)
       under.setValues([
         { label: "Syn fut", text: fmt2(b.synth), color: LINE.synth },
         { label: "Spot", text: fmt2(b.spot), color: LINE.spot },
       ])
-      vol?.setValues([{ text: b.iv !== null ? `${b.iv.toFixed(2)}%` : "-", color: LINE.iv }])
-      vix?.setValues([{ text: b.vix !== null ? b.vix.toFixed(2) : "-", color: LINE.vix }])
+      vol?.setValues([
+        { text: b.iv !== null ? `${b.iv.toFixed(2)}%` : "-", color: LINE.iv },
+      ])
+      vix?.setValues([
+        { text: b.vix !== null ? b.vix.toFixed(2) : "-", color: LINE.vix },
+      ])
     }
     paintLast.current = paint
     const tail = bars.current.at(-1)
@@ -351,7 +501,8 @@ export function StraddleChart({
       }
       const t = e.time * 1000
       const first = bars.current[0]
-      const b = first && t < first.t ? barAt(older.current, t) : barAt(bars.current, t)
+      const b =
+        first && t < first.t ? barAt(older.current, t) : barAt(bars.current, t)
       if (b) paint(b)
     })
 
@@ -376,7 +527,10 @@ export function StraddleChart({
           setPaging({ kind: "loading", day })
           let got: StraddleBar[] = []
           try {
-            const r = await hub.request<{ bars: StraddleBar[] }>({ op: "straddle_history", underlying, expiry, date: day }, "straddle_history")
+            const r = await hub.request<{ bars: StraddleBar[] }>(
+              { op: "straddle_history", underlying, expiry, date: day },
+              "straddle_history"
+            )
             got = [...r.bars].sort((a, b) => a.t - b.t)
           } catch {
             got = []
@@ -386,7 +540,10 @@ export function StraddleChart({
           got = head0 ? got.filter((b) => b.t < head0.t) : got
           if (got.length === 0) continue
           older.current = [...got, ...older.current]
-          for (const [key, s] of Object.entries(lines.current) as [Key, SeriesApi][]) {
+          for (const [key, s] of Object.entries(lines.current) as [
+            Key,
+            SeriesApi,
+          ][]) {
             const pick = picks[key]
             if (pick) s.prependData(got.map((b) => point(b, pick(b))))
           }
@@ -403,10 +560,19 @@ export function StraddleChart({
 
     // The whole of the picked session in view, earlier sessions paged in sitting off to the left.
     const lead = older.current.length
-    chart.setVisibleLogicalRange({ from: lead, to: lead + bars.current.length - 1 })
+    chart.setVisibleLogicalRange({
+      from: lead,
+      to: lead + bars.current.length - 1,
+    })
     // Spot and the synthetic future held centred on what is in view: refitted on a pan, a zoom, a live minute.
     const synthScale = lines.current.synth?.priceScale()
-    const refit = () => synthScale && fitSpot(synthScale, [...older.current, ...bars.current], chart.getVisibleLogicalRange())
+    const refit = () =>
+      synthScale &&
+      fitSpot(
+        synthScale,
+        [...older.current, ...bars.current],
+        chart.getVisibleLogicalRange()
+      )
     refitRef.current = refit
     refit()
     const offPan = chart.on("pan", refit)
@@ -425,14 +591,30 @@ export function StraddleChart({
       for (const s of Object.values(made)) s.remove()
       if (lines.current === made) lines.current = {}
     }
-  }, [chart, colors, version, legs, name, underlying, expiry, session, roomForVol])
+  }, [
+    chart,
+    colors,
+    version,
+    legs,
+    name,
+    underlying,
+    expiry,
+    session,
+    roomForVol,
+  ])
 
   const first = useMemo(() => bars.current[0] ?? null, [version])
   const change = last && first ? last.straddle - first.straddle : null
-  const pct = change !== null && first && first.straddle ? (change / first.straddle) * 100 : null
+  const pct =
+    change !== null && first && first.straddle
+      ? (change / first.straddle) * 100
+      : null
   const dte = expiry ? daysTo(expiry) : null
 
-  const toggleLeg = (leg: string) => setLegs((cur) => (cur.includes(leg) ? cur.filter((l) => l !== leg) : [...cur, leg]))
+  const toggleLeg = (leg: string) =>
+    setLegs((cur) =>
+      cur.includes(leg) ? cur.filter((l) => l !== leg) : [...cur, leg]
+    )
 
   return (
     <ChartFrame
@@ -470,8 +652,13 @@ export function StraddleChart({
               </DropdownMenuTrigger>
             </Tip>
             <DropdownMenuContent align="start" className="w-44">
-              <DropdownMenuRadioGroup value={session} onValueChange={setSession}>
-                <DropdownMenuRadioItem value="today">Today</DropdownMenuRadioItem>
+              <DropdownMenuRadioGroup
+                value={session}
+                onValueChange={setSession}
+              >
+                <DropdownMenuRadioItem value="today">
+                  Today
+                </DropdownMenuRadioItem>
                 {PAST.map((d) => (
                   <DropdownMenuRadioItem key={d} value={d}>
                     {sessionLabel(d)}
@@ -482,19 +669,29 @@ export function StraddleChart({
           </DropdownMenu>
           <ToolDivider />
           <Tip label="Show the call leg">
-            <ToolButton aria-label="Call leg" active={legs.includes("call")} onClick={() => toggleLeg("call")} aria-pressed={legs.includes("call")}>
+            <ToolButton
+              aria-label="Call leg"
+              active={legs.includes("call")}
+              onClick={() => toggleLeg("call")}
+              aria-pressed={legs.includes("call")}
+            >
               <span className="size-2 rounded-sm bg-up" aria-hidden />
               <span data-drop="5">Call</span>
             </ToolButton>
           </Tip>
           <Tip label="Show the put leg">
-            <ToolButton aria-label="Put leg" active={legs.includes("put")} onClick={() => toggleLeg("put")} aria-pressed={legs.includes("put")}>
+            <ToolButton
+              aria-label="Put leg"
+              active={legs.includes("put")}
+              onClick={() => toggleLeg("put")}
+              aria-pressed={legs.includes("put")}
+            >
               <span className="size-2 rounded-sm bg-down" aria-hidden />
               <span data-drop="5">Put</span>
             </ToolButton>
           </Tip>
           {paging.kind === "loading" ? (
-            <span data-drop="1" className="type-meta px-2 whitespace-nowrap">
+            <span data-drop="1" className="px-2 type-meta whitespace-nowrap">
               Loading {sessionLabel(paging.day)}
             </span>
           ) : null}
@@ -513,26 +710,55 @@ export function StraddleChart({
             <Stat
               label="VWAP"
               value={last?.vwap != null ? fmt2(last.vwap) : "-"}
-              sub={last?.vwap != null ? (last.straddle >= last.vwap ? "Straddle over it" : "Straddle under it") : undefined}
+              sub={
+                last?.vwap != null
+                  ? last.straddle >= last.vwap
+                    ? "Straddle above"
+                    : "Straddle below"
+                  : undefined
+              }
               hint="The straddle's volume-weighted average this session"
             />
             <Stat
               label="Strike"
               value={last ? fmt0(last.strike) : "-"}
-              sub={last && last.atm !== last.strike ? `ATM ${fmt0(last.atm)}` : undefined}
+              sub={
+                last && last.atm !== last.strike
+                  ? `ATM ${fmt0(last.atm)}`
+                  : undefined
+              }
               hint="The strike the straddle is struck at, held until the money has moved well clear of it"
             />
+            {/* One leg per line: the pair on one line ran past a sixth of the frame and was cut. The synthetic future is in the chart's status line. */}
             <Stat
-              label="Call + put"
-              value={last ? `${fmt2(last.call)} + ${fmt2(last.put)}` : "-"}
-              sub={last ? `Synthetic ${fmt0(last.synth)}` : undefined}
-              hint="The two legs, and the synthetic future they imply"
+              label="Call"
+              value={last ? fmt2(last.call) : "-"}
+              sub={last ? `Put ${fmt2(last.put)}` : undefined}
+              hint={
+                last
+                  ? `The two legs at the strike. Together they imply a synthetic future of ${fmt0(last.synth)}.`
+                  : "The two legs at the strike"
+              }
             />
-            <Stat label="Implied vol" value={last?.iv != null ? `${last.iv.toFixed(2)}%` : "-"} sub={last?.vix != null ? `VIX ${last.vix.toFixed(2)}` : undefined} />
+            <Stat
+              label="Implied vol"
+              value={last?.iv != null ? `${last.iv.toFixed(2)}%` : "-"}
+              sub={last?.vix != null ? `VIX ${last.vix.toFixed(2)}` : undefined}
+            />
             <Stat
               label="Straddle / spot"
-              value={last && last.spot ? `${((last.straddle / last.spot) * 100).toFixed(2)}%` : "-"}
-              sub={dte !== null ? (dte === 0 ? "Expires today" : `${dte}d to expiry`) : undefined}
+              value={
+                last && last.spot
+                  ? `${((last.straddle / last.spot) * 100).toFixed(2)}%`
+                  : "-"
+              }
+              sub={
+                dte !== null
+                  ? dte === 0
+                    ? "Expires today"
+                    : `${dte}d to expiry`
+                  : undefined
+              }
               hint="The straddle as a share of the spot: the move priced in to expiry"
             />
           </div>

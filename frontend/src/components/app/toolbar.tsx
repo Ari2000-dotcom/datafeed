@@ -89,10 +89,11 @@ export function ToolDivider({ drop }: { drop?: number }) {
 export function MenuRow({ icon, label, hint }: { icon?: ReactNode; label: string; hint?: string }) {
   return (
     <>
-      {icon ? <span className="flex w-7 shrink-0 items-center justify-center text-muted-foreground">{icon}</span> : null}
+      {/* The icon on a soft tile, as a macOS menu sets its symbols: it reads as a picture, not a stray line. */}
+      {icon ? <span className="flex size-8 shrink-0 items-center justify-center rounded-[7px] bg-seg-track text-soft shadow-[inset_0_1px_0_rgb(255_255_255/5%)] [&_svg]:size-7!">{icon}</span> : null}
       <span className="flex min-w-0 flex-col">
-        <span>{label}</span>
-        {hint ? <span className="type-meta">{hint}</span> : null}
+        <span className="leading-[18px] text-foreground">{label}</span>
+        {hint ? <span className="type-meta leading-4">{hint}</span> : null}
       </span>
     </>
   )

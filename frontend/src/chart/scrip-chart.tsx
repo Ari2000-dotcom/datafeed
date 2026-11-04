@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { PaneLegend, withAlpha, type Bar, type LegendValue, type PriceScaleMode, type SeriesApi, type SeriesType } from "openalgo-charts"
 
 import { ChartFrame } from "@/chart/frame"
@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { delta76, yearsToExpiry } from "@/lib/black76"
 import { fmt0, fmt2, fmtCompact, istClock, istDate, signed, signedPct } from "@/lib/format"
 import { bySession, getCandles, type Candle } from "@/lib/history"
-import { inSession } from "@/lib/session"
+import { inSession, sessions, tradingHours } from "@/lib/session"
 import { useQuote } from "@/lib/use-hub"
 import { useNow } from "@/lib/use-now"
 import { useForwardIv, useOiProfile } from "@/lib/use-oi-profile"
@@ -137,21 +137,68 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
   const [error, setError] = useState<string | null>(null)
   const key = `${id}|${spec.value}`
   const loading = !loaded || loaded.key !== key
+  const keyRef = useRef(key)
+  keyRef.current = key
+
+  /*
+   * Gap healing, as QuantDesk's chart does it. The live feed only knows the ticks after it was joined,
+   * and history is the hub's answer at one moment, so bars can go missing between them: switching back
+   * to an instrument within a minute (its history shared from before), a feed hiccup, a tab asleep.
+   * Three things re-read history, each keeping the view and the live bar:
+   *   - a live tick that starts a bar more than one interval after the last (the bars between are missing);
+   *   - the first bar boundary after the chart opens, so the bar it opened in is the hub's full bar,
+   *     not only the ticks seen since;
+   *   - once a bar on every intraday interval while the market is open (a minute at least).
+   */
+  const [reloads, setReloads] = useState<{ key: string; n: number }>({ key: "", n: 0 })
+  const reload = useCallback(() => setReloads((r) => ({ key: keyRef.current, n: r.key === keyRef.current ? r.n + 1 : 1 })), [])
+  const refreshing = reloads.key === key && reloads.n > 0
+  const reloadN = refreshing ? reloads.n : 0
 
   useEffect(() => {
     let cancelled = false
-    setError(null)
-    getCandles(id, spec.source, spec.days).then(
+    if (!refreshing) setError(null)
+    getCandles(id, spec.source, spec.days, false, refreshing).then(
       (candles) => !cancelled && setLoaded({ key, candles: inSession(id, candles, spec.value !== "1d") }),
-      (e: unknown) => !cancelled && setError(e instanceof Error ? e.message : "Could not load candles."),
+      // A failed refresh leaves the chart as it was; only a first load says so.
+      (e: unknown) => !cancelled && !refreshing && setError(e instanceof Error ? e.message : "Could not load candles."),
     )
     return () => {
       cancelled = true
     }
-  }, [id, spec, key])
+  }, [id, spec, key, reloadN]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Once a bar (a minute at least) on every intraday interval while the market is open and the page is in
+  // view: the closed bar becomes the hub's own, and VWAP, ATP and the other indicators take it in.
+  useEffect(() => {
+    if (spec.seconds >= 86_400 || loading) return
+    const exchange = id.startsWith("mcx:") ? "MCX" : "NSE"
+    const timer = window.setInterval(() => {
+      const open = sessions().find((x) => x.exchange === exchange)?.state === "open"
+      if (open && document.visibilityState === "visible") reload()
+    }, Math.max(60, spec.seconds) * 1000)
+    return () => window.clearInterval(timer)
+  }, [id, spec.seconds, loading, reload])
+
+  // The bar boundary after the chart opens on an instrument and interval: once per key.
+  const handoff = useRef<{ key: string; timer: number | null }>({ key: "", timer: null })
+  useEffect(
+    () => () => {
+      if (handoff.current.timer !== null) window.clearTimeout(handoff.current.timer)
+      handoff.current = { key: "", timer: null }
+    },
+    [key],
+  )
+  const lastGap = useRef(0)
+  /** The live bar as last drawn, so a refreshed history that ends before it does not drop it. */
+  const liveBar = useRef<{ key: string; bar: Bar } | null>(null)
+  /** The view as it stood when the series was last torn down, so a refresh or a restyle keeps it. */
+  const view = useRef<{ key: string; range: { from: number; to: number }; length: number; preset: string | null } | null>(null)
 
   // While a new interval loads, the old candles stay on screen.
   const candles = loaded?.candles ?? null
+  /** Which instrument and interval the candles on hand are: the view and the live bar are kept per this. */
+  const drawnKey = loaded?.key ?? ""
   const hasVolume = useMemo(() => (candles ?? []).some((c) => c.volume > 0), [candles])
   const price = useRef<SeriesApi | null>(null)
   const hovering = useRef(false)
@@ -209,19 +256,35 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
     // TradingView's status line: the name, then interval and exchange in the dimmed params, then the readings.
     const exchange = EXCHANGE[id.split(":")[0] ?? ""] ?? ""
     // TradingView's status line: the name at 14px, then O H L C and the change at 12px on the same line.
-    const ohlc = mk(0, { id: "price", title: `${name.toUpperCase()} · ${spec.label}${exchange ? ` · ${exchange}` : ""}`, row: 0, titleFont: 14 })
+    // The name as it is written ("Nifty 50"), the interval and exchange dimmed after it, a dot for the
+    // session (green while its market is open), then the readings; on a soft plate so the line reads
+    // over candles that run under it.
+    const venue = id.startsWith("mcx:") ? "MCX" : "NSE"
+    const ohlc = mk(0, {
+      id: "price",
+      title: name,
+      params: `${spec.label}${exchange ? ` · ${exchange}` : ""}`,
+      row: 0,
+      titleFont: 14,
+      status: () => {
+        const open = sessions().find((x) => x.exchange === venue)?.state === "open"
+        return { marketStatus: { text: "●", color: open ? colors.up : withAlpha(colors.muted, 0.55) } }
+      },
+      statusLine: { background: true, backgroundColor: colors.ground, backgroundOpacity: 0.86 },
+    })
     const groups: { legend: PaneLegend; traces: Trace[] }[] = []
     let overlayRows = 0
     for (const def of INDICATORS) {
       if (!prefs.indicators.includes(def.id) || (def.needsVolume && !hasVolume)) continue
       const paneIndex = def.place === "overlay" ? 0 : chart.panes().length
-      const built = build(def.id, candles, colors)
+      // VWAP and ATP start at the session's opening bar; a daily chart has no time of day to anchor on.
+      const built = build(def.id, candles, colors, { open: spec.seconds < 86_400 ? tradingHours(id).start : 0 })
       for (const t of built) {
         const s = chart.addSeries(t.type, {
           ...base,
           paneIndex,
           priceFormat: { type: "custom", formatter: t.key === "volume" || t.key === "macd-hist" ? fmtCompact : fmt2 },
-          style: { color: t.color, lineWidth: t.width, title: undefined, lastValueVisible: def.place === "pane" && t.type === "line", priceLineVisible: false },
+          style: { color: t.color, lineWidth: t.width, sessionBreaks: t.sessionBreaks, title: undefined, lastValueVisible: def.place === "pane" && t.type === "line", priceLineVisible: false },
         })
         s.setData(t.points)
         made.push(s)
@@ -237,8 +300,18 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
     // The name and its readings, each overlay, the OI row: 20px apiece (the engine's legend line) from 6px down.
     legendBottom.current = 6 + (2 + overlayRows) * 20 + 4
     profile.current?.setOptions({ chipTop: legendBottom.current })
+    // A live bar newer than the history's last (the hub's answer can trail the feed by a bar) stays on.
+    const held = liveBar.current
+    if (held && held.key === drawnKey && held.bar.time > (candles.at(-1)?.time ?? Infinity)) series.update(held.bar)
     const range = RANGES.find((r) => r.label === prefs.range)
-    if (range) {
+    const kept = view.current
+    if (kept && kept.key === drawnKey && kept.preset === prefs.range) {
+      // Same instrument and interval (a refresh, a new chart type, an indicator): the view stays where
+      // it was, moved along with new bars when it was following the live edge.
+      const added = series.getData().length - kept.length
+      const following = kept.range.to >= kept.length - 1
+      chart.setVisibleLogicalRange(following ? { from: kept.range.from + added, to: kept.range.to + added } : kept.range)
+    } else if (range) {
       // The last N sessions: from the first bar of the Nth-last one, with a few bars of air on the right.
       const days = bySession(candles)
       const first = days[Math.max(0, days.length - range.sessions)]?.candles[0]
@@ -291,7 +364,10 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
       if (hovering.current && e.bar) paint(e.bar, index.get(e.bar.time))
       else paintLast.current?.()
     })
+    const setupKey = drawnKey
+    const setupPreset = prefs.range
     return () => {
+      view.current = { key: setupKey, range: chart.getVisibleLogicalRange(), length: series.getData().length, preset: setupPreset }
       off()
       paintLast.current = null
       oiLegend.current = null
@@ -300,7 +376,7 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
       for (let i = chart.panes().length - 1; i >= 1; i--) chart.removePane(i, { force: true })
       price.current = null
     }
-  }, [chart, colors, candles, prefs.kind, prefs.range, indicatorKey, hasVolume, name, spec.label]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chart, colors, candles, prefs.kind, prefs.range, indicatorKey, hasVolume, name, spec.label, drawnKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- the scale mode -------------------------------------------------------------------
   useEffect(() => {
@@ -321,10 +397,29 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
       series.update({ ...last, high: Math.max(last.high, ltp), low: Math.min(last.low, ltp), close: ltp })
     } else if (istDate(t * 1000) === istDate(last.time * 1000)) {
       // The next bar of the same session, on the interval's own grid.
-      series.update({ time: last.time + Math.floor((t - last.time) / spec.seconds) * spec.seconds, open: ltp, high: ltp, low: ltp, close: ltp })
+      const start = last.time + Math.floor((t - last.time) / spec.seconds) * spec.seconds
+      series.update({ time: start, open: ltp, high: ltp, low: ltp, close: ltp })
+      // Bars skipped between the last one and this: history has them, so ask again (at most every 30 s).
+      if (start - last.time > spec.seconds && Date.now() - lastGap.current > 30_000) {
+        lastGap.current = Date.now()
+        reload()
+      }
+    }
+    const drawn = series.getData().at(-1)
+    if (drawn) liveBar.current = { key, bar: drawn }
+    // The first tick on this chart: re-read history just after the bar it fell in closes.
+    if (handoff.current.key !== key && spec.seconds < 86_400) {
+      const untilNext = (spec.seconds - (t % spec.seconds)) * 1000
+      handoff.current = {
+        key,
+        timer: window.setTimeout(() => {
+          handoff.current.timer = null
+          reload()
+        }, untilNext + 2_000),
+      }
     }
     paintLast.current?.()
-  }, [quote, spec, loading])
+  }, [quote, spec, loading, key, reload])
 
   // --- the OI profile -------------------------------------------------------------------
   const profileOn = prefs.profile !== "off" && !!expiry

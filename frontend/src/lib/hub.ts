@@ -20,6 +20,8 @@ export interface Quote {
   oi?: number
   poi?: number
   atp?: number
+  /** Yesterday's close, sent for instruments the site has no history of (Upstox's global indices). */
+  pc?: number
   ts: number
   /** The broker's last known state, not a live tick. */
   replay?: boolean
@@ -40,7 +42,8 @@ interface Pending {
 }
 
 const BASE_BACKOFF_MS = 1_000
-const MAX_BACKOFF_MS = 30_000
+/** Capped low: a trader looking at a stale price should not wait half a minute for the next try. */
+const MAX_BACKOFF_MS = 8_000
 const LINGER_MS = 3_000
 const QUOTE_PREFIX = "quote:"
 
@@ -55,6 +58,8 @@ export class Hub {
   private attempt = 0
   private nextReq = 1
   private retryTimer: ReturnType<typeof setTimeout> | undefined
+  /** When the next reconnect attempt fires, for a countdown; null while open or connecting. */
+  private retryAt: number | null = null
   private readonly statusListeners = new Set<() => void>()
   private readonly pending = new Map<string, Pending>()
 
@@ -76,11 +81,28 @@ export class Hub {
   constructor(url: string) {
     this.url = url
     this.open()
+    // Back on the network, or back on the tab after the laptop slept: try at once instead of waiting out the backoff.
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.retryNow)
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") this.retryNow()
+      })
+    }
   }
 
   // --- status -------------------------------------------------------------
 
   getStatus = (): HubStatus => this.status
+
+  getRetryAt = (): number | null => this.retryAt
+
+  /** Skips the wait before the next reconnect attempt. Does nothing while the socket is open or opening. */
+  retryNow = (): void => {
+    if (this.ws !== null) return
+    clearTimeout(this.retryTimer)
+    this.retryAt = null
+    this.open()
+  }
 
   onStatus = (fn: () => void): (() => void) => {
     this.statusListeners.add(fn)
@@ -122,7 +144,7 @@ export class Hub {
           this.active.delete(id)
           this.quotes.delete(id)
           this.queue("unsub", id)
-        }, LINGER_MS),
+        }, LINGER_MS)
       )
     }
   }
@@ -156,7 +178,11 @@ export class Hub {
   // --- requests -----------------------------------------------------------
 
   /** Sends `op` with a fresh `req` id and resolves with the reply of type `want`. */
-  request<T>(op: Record<string, unknown>, want: string, timeoutMs = 30_000): Promise<T> {
+  request<T>(
+    op: Record<string, unknown>,
+    want: string,
+    timeoutMs = 30_000
+  ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       if (this.status !== "open") {
         reject(new Error("Not connected to the feed yet."))
@@ -167,7 +193,12 @@ export class Hub {
         this.pending.delete(req)
         reject(new Error("The feed did not answer in time."))
       }, timeoutMs)
-      this.pending.set(req, { resolve: resolve as (v: never) => void, reject, timer, want })
+      this.pending.set(req, {
+        resolve: resolve as (v: never) => void,
+        reject,
+        timer,
+        want,
+      })
       this.send({ ...op, req })
     })
   }
@@ -182,7 +213,10 @@ export class Hub {
     ws.onopen = () => {
       this.attempt = 0
       this.setStatus("open")
-      const topics = [...[...this.active].map((id) => QUOTE_PREFIX + id), ...this.feeds.keys()]
+      const topics = [
+        ...[...this.active].map((id) => QUOTE_PREFIX + id),
+        ...this.feeds.keys(),
+      ]
       if (topics.length > 0) this.send({ op: "sub", topics })
     }
     ws.onmessage = (event) => this.receive(String(event.data))
@@ -195,10 +229,20 @@ export class Hub {
         this.pending.delete(req)
       }
       // Full jitter: after a hub restart the tabs come back spread over the ceiling, not in one second.
-      const ceiling = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** this.attempt)
+      const ceiling = Math.min(
+        MAX_BACKOFF_MS,
+        BASE_BACKOFF_MS * 2 ** this.attempt
+      )
       this.attempt += 1
+      const wait = 250 + Math.random() * ceiling
+      this.retryAt = Date.now() + wait
       this.setStatus("reconnecting")
-      this.retryTimer = setTimeout(() => this.open(), 250 + Math.random() * ceiling)
+      // Listeners read retryAt for the countdown; status alone would not change between two failed attempts.
+      for (const fn of this.statusListeners) fn()
+      this.retryTimer = setTimeout(() => {
+        this.retryAt = null
+        this.open()
+      }, wait)
     }
   }
 
@@ -216,14 +260,22 @@ export class Hub {
       if (p && (msg.t === p.want || msg.t === "err")) {
         clearTimeout(p.timer)
         this.pending.delete(req)
-        if (msg.t === "err") p.reject(new Error(String(msg.error ?? "The feed refused the request.")))
+        if (msg.t === "err")
+          p.reject(
+            new Error(String(msg.error ?? "The feed refused the request."))
+          )
         else p.resolve(msg as never)
         return
       }
     }
 
     const topic = msg.topic
-    if (msg.t === "q" && typeof topic === "string" && topic.startsWith(QUOTE_PREFIX) && typeof msg.ltp === "number") {
+    if (
+      msg.t === "q" &&
+      typeof topic === "string" &&
+      topic.startsWith(QUOTE_PREFIX) &&
+      typeof msg.ltp === "number"
+    ) {
       const id = topic.slice(QUOTE_PREFIX.length)
       this.quotes.set(id, {
         ltp: msg.ltp,
@@ -233,6 +285,7 @@ export class Hub {
         oi: typeof msg.oi === "number" ? msg.oi : undefined,
         poi: typeof msg.poi === "number" ? msg.poi : undefined,
         atp: typeof msg.atp === "number" ? msg.atp : undefined,
+        pc: typeof msg.pc === "number" ? msg.pc : undefined,
         ts: typeof msg.ts === "number" ? msg.ts : Date.now(),
         replay: msg.replay === true ? true : undefined,
       })
@@ -262,8 +315,16 @@ export class Hub {
     this.flushQueued = true
     queueMicrotask(() => {
       this.flushQueued = false
-      if (this.unsubQ.size > 0) this.send({ op: "unsub", topics: [...this.unsubQ].map((id) => QUOTE_PREFIX + id) })
-      if (this.subQ.size > 0) this.send({ op: "sub", topics: [...this.subQ].map((id) => QUOTE_PREFIX + id) })
+      if (this.unsubQ.size > 0)
+        this.send({
+          op: "unsub",
+          topics: [...this.unsubQ].map((id) => QUOTE_PREFIX + id),
+        })
+      if (this.subQ.size > 0)
+        this.send({
+          op: "sub",
+          topics: [...this.subQ].map((id) => QUOTE_PREFIX + id),
+        })
       this.unsubQ = new Set()
       this.subQ = new Set()
     })

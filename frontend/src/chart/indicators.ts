@@ -1,9 +1,9 @@
 import { atr, ema, rsi, supertrend, type Bar, type LinePoint, type Whitespace } from "openalgo-charts"
 
-import { istDate } from "@/lib/format"
+import { istDate, istParts } from "@/lib/format"
 import type { Palette } from "@/chart/theme"
 
-export type IndicatorId = "volume" | "sma20" | "ema20" | "ema50" | "vwap" | "bb" | "supertrend" | "rsi" | "macd" | "atr"
+export type IndicatorId = "volume" | "sma20" | "ema20" | "ema50" | "vwap" | "atp" | "bb" | "supertrend" | "rsi" | "macd" | "atr"
 
 export interface IndicatorDef {
   id: IndicatorId
@@ -22,7 +22,8 @@ export const INDICATORS: readonly IndicatorDef[] = [
   { id: "sma20", name: "SMA 20", title: "SMA", params: "20 close", place: "overlay" },
   { id: "ema20", name: "EMA 20", title: "EMA", params: "20 close", place: "overlay" },
   { id: "ema50", name: "EMA 50", title: "EMA", params: "50 close", place: "overlay" },
-  { id: "vwap", name: "VWAP", title: "VWAP", params: "session", place: "overlay", needsVolume: true },
+  { id: "vwap", name: "VWAP", title: "VWAP", params: "from the open", place: "overlay", needsVolume: true },
+  { id: "atp", name: "ATP (average traded price)", title: "ATP", params: "from the open", place: "overlay" },
   { id: "bb", name: "Bollinger Bands 20, 2", title: "Bollinger Bands", params: "20 2", place: "overlay" },
   { id: "supertrend", name: "Supertrend 10, 3", title: "Supertrend", params: "10 3", place: "overlay" },
   { id: "volume", name: "Volume", title: "Volume", params: "", place: "pane", needsVolume: true },
@@ -41,6 +42,8 @@ export interface Trace {
   points: (LinePoint | Whitespace)[]
   /** A legend reads these by bar index. */
   values: number[]
+  /** Starts afresh each session: the line is broken at each day's opening bar, not joined across the night. */
+  sessionBreaks?: boolean
 }
 
 const finite = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v)
@@ -65,30 +68,55 @@ function emaFrom(values: readonly number[], period: number): number[] {
   return ema(values, period).map((v, i) => (i >= period - 1 ? v : NaN))
 }
 
-/** Session VWAP: typical price weighted by volume, restarted at each IST day. */
-function vwap(bars: readonly Bar[]): number[] {
+/**
+ * A running average over each session, anchored at its opening bar (09:15 IST on NSE and BSE, 09:00
+ * on MCX) and restarted every day; bars before the open are left blank. `weight` says how much each
+ * bar's typical price (high + low + close) / 3 counts: its volume for VWAP, one apiece for ATP.
+ */
+function anchored(bars: readonly Bar[], open: number, weight: (b: Bar) => number): number[] {
   const out: number[] = []
   let day = ""
   let pv = 0
-  let vol = 0
+  let w = 0
   for (const b of bars) {
-    const d = istDate(b.time * 1000)
+    const ms = b.time * 1000
+    const d = istDate(ms)
     if (d !== day) {
       day = d
       pv = 0
-      vol = 0
+      w = 0
     }
-    const v = b.volume ?? 0
-    pv += ((b.high + b.low + b.close) / 3) * v
-    vol += v
-    out.push(vol > 0 ? pv / vol : NaN)
+    // Daily bars have no time of day and pass whole.
+    if (istParts(ms).minutes < open && open > 0) {
+      out.push(NaN)
+      continue
+    }
+    const k = weight(b)
+    pv += ((b.high + b.low + b.close) / 3) * k
+    w += k
+    out.push(w > 0 ? pv / w : NaN)
   }
   return out
 }
 
+/** Session VWAP from the open: typical price weighted by volume. */
+const vwap = (bars: readonly Bar[], open: number) => anchored(bars, open, (b) => b.volume ?? 0)
+
+/**
+ * ATP, the average traded price from the open: every bar's typical price counted equally, so it
+ * reads the same with or without volume (an index has none of its own).
+ */
+const atp = (bars: readonly Bar[], open: number) => anchored(bars, open, () => 1)
+
+export interface BuildOptions {
+  /** The session's opening minute, IST (555 = 09:15); 0 for daily bars. */
+  open?: number
+}
+
 /** Builds the traces an indicator draws, over `bars`, in the palette's colours. */
-export function build(id: IndicatorId, bars: readonly Bar[], p: Palette): Trace[] {
+export function build(id: IndicatorId, bars: readonly Bar[], p: Palette, o: BuildOptions = {}): Trace[] {
   const close = bars.map((b) => b.close)
+  const open = o.open ?? 0
   switch (id) {
     case "sma20":
       return [trace(bars, "sma20", "SMA 20", p.accent, sma(close, 20))]
@@ -97,7 +125,9 @@ export function build(id: IndicatorId, bars: readonly Bar[], p: Palette): Trace[
     case "ema50":
       return [trace(bars, "ema50", "EMA 50", p.text, emaFrom(close, 50))]
     case "vwap":
-      return [trace(bars, "vwap", "VWAP", cssViolet(), vwap(bars))]
+      return [{ ...trace(bars, "vwap", "VWAP", cssViolet(), vwap(bars, open), 1.5), sessionBreaks: true }]
+    case "atp":
+      return [{ ...trace(bars, "atp", "ATP", cssSky(), atp(bars, open), 1.5), sessionBreaks: true }]
     case "bb": {
       const mid = sma(close, 20)
       const dev = close.map((_, i) => {
@@ -145,6 +175,7 @@ export function build(id: IndicatorId, bars: readonly Bar[], p: Palette): Trace[
 /** Two more hues for lines that must tell apart from the accent, fixed so a chart reads the same in dark and light. */
 const cssAmber = () => "rgb(217, 164, 65)"
 const cssViolet = () => "rgb(160, 130, 224)"
+const cssSky = () => "rgb(86, 180, 233)"
 
 /** `rgb(r, g, b)` at an alpha, for the colours `cssColor` returns. */
 export function withAlphaRgb(color: string, alpha: number): string {

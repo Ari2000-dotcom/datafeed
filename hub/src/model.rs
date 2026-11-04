@@ -103,6 +103,9 @@ pub struct Tick {
     /// Today's average traded price from the exchange (volume-weighted), when the feed sends it:
     /// futures, options and shares carry one, an index never does.
     pub atp: Option<f64>,
+    /// Yesterday's close, when the feed sends it (Upstox's global indices): the site has no history
+    /// for those to measure the day's change against.
+    pub prev_close: Option<f64>,
     pub ts_ms: i64,
     pub src: &'static str,
     /// The broker repeating its last known state (Shoonya's reply to a subscribe),

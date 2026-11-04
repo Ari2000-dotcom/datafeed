@@ -18,7 +18,7 @@ import { useWorkspace, workspace, type CellState, type Target } from "@/lib/work
 import { cn } from "@/lib/utils"
 
 /** The width of a gutter, px: the room between two containers, and what is grabbed to resize them. */
-const GUTTER = 8
+const GUTTER = 6
 /** The least a container may be dragged down to, px. */
 const MIN_W = 260
 const MIN_H = 180
@@ -298,7 +298,7 @@ export function ChartsPage({ route }: { route: Extract<Route, { name: "charts" }
   const stacked = width > 0 && width < STACK_BELOW
 
   return (
-    <div ref={page} className="flex h-full min-h-0 flex-col overflow-auto bg-background p-2">
+    <div ref={page} className="flex h-full min-h-0 flex-col overflow-auto bg-background p-1.5">
       {loading ? (
         <div className="flex flex-1 flex-col gap-2" aria-busy="true">
           <Skeleton className="h-16 w-full" />

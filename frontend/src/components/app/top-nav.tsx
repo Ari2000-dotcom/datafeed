@@ -64,9 +64,9 @@ export function TopNav({ onSearch, stripHidden, onShowStrip }: { onSearch: () =>
   const route = useRoute()
   return (
     <header className="flex h-10 shrink-0 items-center gap-1 border-b bg-chrome pr-2 pl-3">
-      <a href={hrefOf.markets()} className="mr-3 flex items-center gap-2 outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="AlphaHedge, home">
+      <a href={hrefOf.markets()} className="mr-4 flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="AlphaHedge, home">
         <Logo />
-        <span className="hidden text-base font-semibold tracking-tight sm:inline">AlphaHedge</span>
+        <span className="hidden text-[17px] leading-none font-semibold tracking-[-0.02em] sm:inline">Alpha<span className="text-[#9a9cff]">Hedge</span></span>
       </a>
       <nav aria-label="Primary" className="flex items-center">
         {NAV.map((item) => (
@@ -97,7 +97,7 @@ export function TopNav({ onSearch, stripHidden, onShowStrip }: { onSearch: () =>
           type="button"
           onClick={onSearch}
           aria-label="Search instruments"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center gap-2 rounded-md bg-seg-track text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring md:w-56 md:justify-start md:pr-1.5 md:pl-2.5"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center gap-1.5 rounded-md bg-seg-track text-[13px] text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring md:w-36 md:justify-start md:pr-1 md:pl-2"
         >
           <SearchIcon />
           <span className="hidden md:inline">Search</span>

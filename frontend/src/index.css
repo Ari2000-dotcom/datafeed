@@ -121,8 +121,8 @@
     --card-foreground: oklch(0.2 0.012 255);
     --popover: oklch(0.995 0.001 255);
     --popover-foreground: oklch(0.2 0.012 255);
-    --primary: oklch(0.52 0.17 255);
-    --primary-foreground: oklch(0.99 0.004 255);
+    --primary: #3d40c4;
+    --primary-foreground: #ffffff;
     --secondary: oklch(0.945 0.004 255);
     --secondary-foreground: oklch(0.2 0.012 255);
     --muted: oklch(0.95 0.004 255);
@@ -162,14 +162,17 @@
 }
 
 .dark {
-    --background: #222120;
+    /* QuantDesk's ladder, measured off its desk: a lighter grey workspace (#272727) the #181818
+       plates lift off, so a container reads as an object sitting on the canvas. */
+    --background: #272727;
     --foreground: #f3f1ed;
-    --card: #1a1917;
+    --card: #181818;
     --card-foreground: #f3f1ed;
     --popover: #2c2b29;
     --popover-foreground: #f3f1ed;
-    --primary: #2997ff;
-    --primary-foreground: oklch(0.16 0.02 252);
+    /* AlphaHedge's indigo, the logo's #2D2E8E lifted to read on a dark plate; the same hue as the active frame. */
+    --primary: #6366f1;
+    --primary-foreground: #ffffff;
     --secondary: #302f2c;
     --secondary-foreground: #f3f1ed;
     --muted: #2f2e2b;
@@ -180,9 +183,9 @@
     --accent: #383633;
     --accent-foreground: #f3f1ed;
     --destructive: #f2615d;
-    --border: #383633;
-    --input: #46443f;
-    --ring: #2997ff;
+    --border: #333333;
+    --input: #464646;
+    --ring: #6366f1;
     --chrome: #1c1b19;
     --seg-track: rgb(128 124 118 / 24%);
     --seg-pill: #666360;
@@ -190,7 +193,7 @@
     --seg-hover: #e8e6e1;
     --seg-active: #f5f3ef;
     /* A soft neutral black for the canvas, QuantDesk's #181818 a step lighter so it is never harsh, under a deeper black toolbar. */
-    --chart-toolbar: #121212;
+    --chart-toolbar: #181818;
     --chart: #1b1b1b;
     --chart-grid: #262626;
     --chart-text: #e8e8e8;
@@ -342,5 +345,181 @@
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
+    }
+}
+
+/*
+ * Containers, as QuantDesk sets them: a dark plate on the lighter workspace, one hairline edge, 8px
+ * corners, a faint highlight along the top and a short, soft lift under it. No blur on the plate.
+ */
+.dark {
+    /* QuantDesk dark: no edge on a container at rest, its indigo frame (75%) on the active one. */
+    --panel-edge: transparent;
+    --panel-active: rgb(99 102 241 / 75%);
+    --panel-rule: rgb(255 255 255 / 14.5%);
+    --tab-ink: #a1a1a6;
+    --tab-ink-active: #e8e8ed;
+    --menu-ground: rgb(40 40 40 / 86%);
+    --menu-hover: rgb(243 241 237 / 9%);
+    --menu-sep: rgb(243 241 237 / 9%);
+}
+:root:not(.dark) {
+    --panel-edge: oklch(0.9 0.005 255);
+    --tab-ink: oklch(0.45 0.013 255);
+    --tab-ink-active: oklch(0.2 0.012 255);
+    --panel-rule: oklch(0.9 0.005 255);
+    --panel-active: oklch(0.52 0.17 255 / 70%);
+    --menu-ground: rgb(255 255 255 / 88%);
+    --menu-hover: rgb(20 24 30 / 6%);
+    --menu-sep: rgb(20 24 30 / 8%);
+}
+
+/*
+ * A container, as QuantDesk's desk draws one: a #181818 plate on the #272727 workspace, 6px corners,
+ * no edge and no shadow at rest (the lighter canvas is what lifts it). The active container takes a
+ * 1px indigo frame, drawn as an overlay so its content never moves a pixel when focus changes.
+ */
+@utility panel {
+    position: relative;
+    border-radius: 6px;
+    border: 1px solid var(--panel-edge);
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        z-index: 5;
+        border: 1px solid transparent;
+        transition: border-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    &[data-active]::after {
+        border-color: var(--panel-active);
+    }
+}
+
+/*
+ * QuantDesk's folder tab: the container's name on a tab that alone carries the plate's ground and runs
+ * into it with no line between. 26px, 12px regular, 6px top corners. The strip sits a pixel over the
+ * plate, so on the active container the tab's fill covers the frame's top edge under it and the frame
+ * wraps tab and plate as one outline.
+ */
+@utility folder-strip {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: flex-end;
+    min-height: 26px;
+    margin-bottom: -1px;
+    flex-shrink: 0;
+}
+@utility folder-tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 10px 1px;
+    border-radius: 6px 6px 0 0;
+    background: var(--card);
+    color: var(--tab-ink);
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0 0 1px 0;
+        border: 1px solid transparent;
+        border-bottom: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        transition: border-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    &[data-active] {
+        color: var(--tab-ink-active);
+    }
+    &[data-active]::after {
+        border-color: var(--panel-active);
+        bottom: 0;
+    }
+}
+
+/* Where a container's header ends: a brighter rule and a hard three-row cast onto the content under it. */
+@utility panel-head {
+    position: relative;
+    z-index: 1;
+    border-bottom: 1px solid var(--panel-rule);
+    box-shadow:
+        0 1px 0 rgb(0 0 0 / 34%),
+        0 2px 0 rgb(0 0 0 / 18%),
+        0 3px 0 rgb(0 0 0 / 7%);
+}
+
+/*
+ * Menus, as Apple draws them: a translucent ground over a strong blur, a dark rim outside and a faint
+ * highlight inside, a large soft lift. They unfold from the control that opened them with a slight
+ * spring and leave faster than they came. Only transform and opacity move, and only while opening.
+ */
+@utility menu-surface {
+    background: var(--menu-ground);
+    -webkit-backdrop-filter: blur(24px) saturate(165%);
+    backdrop-filter: blur(24px) saturate(165%);
+    border-radius: 10px;
+    box-shadow:
+        0 0 0 1px rgb(0 0 0 / 50%),
+        inset 0 0 0 1px rgb(255 255 255 / 7%),
+        0 16px 40px rgb(0 0 0 / 42%),
+        0 3px 10px rgb(0 0 0 / 22%);
+    transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin, var(--radix-select-content-transform-origin, top)));
+    &[data-state="open"] {
+        animation: menu-in 180ms cubic-bezier(0.34, 1.3, 0.64, 1) backwards;
+    }
+    &[data-state="closed"] {
+        animation: menu-out 110ms cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+    &[data-side="top"][data-state="open"] {
+        animation-name: menu-in-up;
+    }
+}
+
+@keyframes menu-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes menu-in-up {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes menu-out {
+    to {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .menu-surface[data-state] {
+        animation-duration: 1ms !important;
+    }
+}
+
+/* A row that may scroll sideways as a last resort, with no bar drawn under it. */
+@utility no-scrollbar {
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+        display: none;
     }
 }

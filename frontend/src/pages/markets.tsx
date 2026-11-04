@@ -1,21 +1,63 @@
-import { useEffect, useMemo, useState } from "react"
-import { AlertIcon, SearchIcon } from "@/components/icons"
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
+import { AlertIcon, ChevronDownIcon, SearchIcon } from "@/components/icons"
 import { Segmented } from "@/components/app/toolbar"
+import { Folder, FolderTab } from "@/components/app/folder"
 
-import { IndexCard } from "@/components/app/index-card"
+import {
+  INDIA_ITEMS,
+  OverviewPanel,
+  commodityItems,
+} from "@/components/app/market-summary"
+import { WorldMarkets } from "@/components/app/world-markets"
 import { Move, TONE_TEXT } from "@/components/app/move"
 import { PageHeader } from "@/components/app/page-header"
 import { RangeBar } from "@/components/app/range-bar"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { daysTo, expiryLabel, fmt0, fmt2, nearestExpiry, signed, toneOf } from "@/lib/format"
-import { EXCHANGE, FEATURED, instrumentName } from "@/lib/instruments"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  daysTo,
+  expiryLabel,
+  fmt0,
+  fmt2,
+  nearestExpiry,
+  signed,
+  toneOf,
+  type Tone,
+} from "@/lib/format"
+import {
+  EXCHANGE,
+  GROUPS,
+  commodityRank,
+  featuredRank,
+  groupOf,
+  instrumentName,
+  leaderOf,
+  type MarketGroup,
+} from "@/lib/instruments"
 import { hrefOf, navigate } from "@/lib/router"
 import { useDay } from "@/lib/use-day"
 import { useReference, useUniverse, type Underlying } from "@/lib/use-hub"
 import { useTickFlash } from "@/lib/use-tick-flash"
+import { useWaited } from "@/lib/use-waited"
 import { cn } from "@/lib/utils"
 
 type Filter = "all" | "nse" | "bse" | "mcx"
@@ -24,19 +66,40 @@ const HEAD = "h-9 px-3 type-label"
 const NUM_HEAD = cn(HEAD, "text-right")
 const CELL = "h-10 px-3 py-0"
 
-/** Whether a row has waited this long for its first quote: past that, a dash beats a skeleton that never resolves. */
-function useWaited(ms: number): boolean {
-  const [waited, setWaited] = useState(false)
-  useEffect(() => {
-    const t = setTimeout(() => setWaited(true), ms)
-    return () => clearTimeout(t)
-  }, [ms])
-  return waited
+/** A leader with the contracts that follow it (its minis), in the order the table shows them. */
+interface Family {
+  leader: Underlying
+  followers: Underlying[]
 }
 
-function MarketRow({ u }: { u: Underlying }) {
+function familiesOf(rows: readonly Underlying[]): Family[] {
+  const present = new Set(rows.map((u) => u.id))
+  const follows = (u: Underlying) => {
+    const lead = leaderOf(u.id)
+    return lead && present.has(lead) ? lead : null
+  }
+  const families = rows
+    .filter((u) => !follows(u))
+    .map((leader): Family => ({ leader, followers: [] }))
+  const byLeader = new Map(families.map((f) => [f.leader.id, f]))
+  for (const u of rows) {
+    const lead = follows(u)
+    if (lead) byLeader.get(lead)?.followers.push(u)
+  }
+  return families
+}
+
+function MarketRow({
+  u,
+  follower = false,
+  onTone,
+}: {
+  u: Underlying
+  follower?: boolean
+  onTone: (id: string, tone: Tone | null) => void
+}) {
   const reference = useReference(u)
-  const day = useDay(reference, { spark: false })
+  const day = useDay(reference)
   const { quote } = day
   const flash = useTickFlash<HTMLSpanElement>(quote?.ltp)
   const waited = useWaited(8_000)
@@ -44,19 +107,41 @@ function MarketRow({ u }: { u: Underlying }) {
   const expiry = nearestExpiry(u.expiries)
   const days = expiry ? daysTo(expiry) : null
   const pending = !quote && !waited
+  const tone = day.change !== null ? toneOf(day.change) : null
+
+  useEffect(() => onTone(u.id, tone), [u.id, tone, onTone])
 
   return (
-    <TableRow onClick={() => navigate(hrefOf.charts(u.id))} className="cursor-pointer">
-      <TableCell className={CELL}>
-        <a href={hrefOf.charts(u.id)} onClick={(e) => e.stopPropagation()} className="font-medium outline-none hover:underline focus-visible:underline">
-          {instrumentName(u.id, u.name)}
-        </a>
-        <span className="ml-2 type-meta">{EXCHANGE[market]}</span>
-        {market === "mcx" ? <span className="ml-1 type-meta">futures</span> : null}
+    <TableRow
+      onClick={() => navigate(hrefOf.charts(u.id))}
+      className="cursor-pointer"
+    >
+      <TableCell className={cn(CELL, follower ? "pl-9" : "pl-4")}>
+        <div className="flex items-center">
+          {follower ? (
+            <span
+              aria-hidden
+              className="relative -top-1 mr-2 size-2.5 shrink-0 rounded-bl-[3px] border-b border-l border-input"
+            />
+          ) : null}
+          <a
+            href={hrefOf.charts(u.id)}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "outline-none hover:underline focus-visible:underline",
+              follower ? "text-soft" : "font-medium"
+            )}
+          >
+            {instrumentName(u.id, u.name)}
+          </a>
+          {follower ? null : (
+            <span className="ml-2 type-meta">{EXCHANGE[market]}</span>
+          )}
+        </div>
       </TableCell>
       <TableCell className={cn(CELL, "text-right")}>
         {quote ? (
-          <span ref={flash} className="num rounded-sm px-1 text-foreground">
+          <span ref={flash} className="rounded-sm px-1 num text-foreground">
             {fmt2(quote.ltp)}
           </span>
         ) : pending ? (
@@ -65,35 +150,132 @@ function MarketRow({ u }: { u: Underlying }) {
           <span className="text-subtle">-</span>
         )}
       </TableCell>
-      <TableCell className={cn(CELL, "num text-right", day.change !== null ? TONE_TEXT[toneOf(day.change)] : "text-subtle")}>{day.change !== null ? signed(day.change) : pending ? <Skeleton className="ml-auto h-4 w-14" /> : "-"}</TableCell>
-      <TableCell className={cn(CELL, "text-right")}>{day.pct !== null || !pending ? <Move change={day.change} pct={day.pct} /> : <Skeleton className="ml-auto h-4 w-14" />}</TableCell>
+      <TableCell
+        className={cn(
+          CELL,
+          "text-right num",
+          day.change !== null ? TONE_TEXT[toneOf(day.change)] : "text-subtle"
+        )}
+      >
+        {day.change !== null ? (
+          signed(day.change)
+        ) : pending ? (
+          <Skeleton className="ml-auto h-4 w-14" />
+        ) : (
+          "-"
+        )}
+      </TableCell>
+      <TableCell className={cn(CELL, "text-right")}>
+        {day.pct !== null || !pending ? (
+          <Move change={day.change} pct={day.pct} />
+        ) : (
+          <Skeleton className="ml-auto h-4 w-14" />
+        )}
+      </TableCell>
       <TableCell className={CELL}>
         <div className="flex items-center gap-2">
-          <span className="num w-[9ch] text-right text-xs text-muted-foreground">{day.low !== null ? fmt2(day.low) : ""}</span>
-          <RangeBar low={day.low} high={day.high} value={quote?.ltp} className="w-20 shrink-0" />
-          <span className="num w-[9ch] text-xs text-muted-foreground">{day.high !== null ? fmt2(day.high) : ""}</span>
+          <span className="w-[9ch] text-right num text-xs text-muted-foreground">
+            {day.low !== null ? fmt2(day.low) : ""}
+          </span>
+          <RangeBar
+            low={day.low}
+            high={day.high}
+            value={quote?.ltp}
+            className="w-20 shrink-0"
+          />
+          <span className="w-[9ch] num text-xs text-muted-foreground">
+            {day.high !== null ? fmt2(day.high) : ""}
+          </span>
         </div>
       </TableCell>
-      <TableCell className={cn(CELL, "num text-right text-muted-foreground")}>{day.prevClose !== null ? fmt2(day.prevClose) : "-"}</TableCell>
-      <TableCell className={cn(CELL, "num text-right")}>
+      <TableCell className={cn(CELL, "text-right num text-muted-foreground")}>
+        {day.prevClose !== null ? fmt2(day.prevClose) : "-"}
+      </TableCell>
+      <TableCell className={cn(CELL, "text-right num")}>
         {expiry ? (
           <>
             {expiryLabel(expiry)}
-            <span className="ml-2 inline-block w-[4ch] text-left text-subtle">{days === 0 ? "today" : `${days}d`}</span>
+            <span className="ml-2 inline-block w-[4ch] text-left text-subtle">
+              {days === 0 ? "today" : `${days}d`}
+            </span>
           </>
         ) : (
           "-"
         )}
       </TableCell>
-      <TableCell className={cn(CELL, "num text-right text-muted-foreground")}>{fmt0(u.lot)}</TableCell>
+      <TableCell
+        className={cn(CELL, "pr-4 text-right num text-muted-foreground")}
+      >
+        {fmt0(u.lot)}
+      </TableCell>
     </TableRow>
+  )
+}
+
+/** A group's heading row: its name, what it holds, and how many of its instruments are up and down on the day. */
+function GroupRow({
+  group,
+  ids,
+  tones,
+  open,
+  onToggle,
+}: {
+  group: MarketGroup
+  ids: readonly string[]
+  tones: Record<string, Tone | null>
+  open: boolean
+  onToggle: () => void
+}) {
+  return (
+    <TableRow className="bg-chrome hover:bg-chrome">
+      <TableCell colSpan={8} className="h-9 p-0">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex h-9 w-full items-center gap-3 px-4 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:bg-muted/40"
+        >
+          <ChevronDownIcon
+            size={12}
+            className={cn(
+              "shrink-0 text-subtle transition-transform duration-200",
+              open ? "" : "-rotate-90"
+            )}
+          />
+          <span className="text-[13px] font-medium">{group.title}</span>
+          <span className="num type-meta">{ids.length}</span>
+          <span className="hidden type-meta sm:inline">{group.note}</span>
+          <span className="ml-auto">
+            <Breadth ids={ids} tones={tones} />
+          </span>
+        </button>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+/** How many of these are up and down on the day, in the moves' colours; grey while none has moved yet. */
+function Breadth({
+  ids,
+  tones,
+}: {
+  ids: readonly string[]
+  tones: Record<string, Tone | null>
+}) {
+  const up = ids.filter((id) => tones[id] === "up").length
+  const down = ids.filter((id) => tones[id] === "down").length
+  return (
+    <span className="flex items-center gap-3 num text-xs">
+      <span className={up ? "text-up" : "text-subtle"}>{up} up</span>
+      <span className={down ? "text-down" : "text-subtle"}>{down} down</span>
+    </span>
   )
 }
 
 function SkeletonRows() {
   return Array.from({ length: 9 }, (_, i) => (
     <TableRow key={i} className="hover:bg-transparent">
-      <TableCell className={CELL}>
+      <TableCell className={cn(CELL, "pl-4")}>
         <Skeleton className="h-4 w-28" />
       </TableCell>
       {Array.from({ length: 7 }, (_, j) => (
@@ -109,48 +291,149 @@ export function MarketsPage() {
   const { list, loading, error } = useUniverse()
   const [filter, setFilter] = useState<Filter>("all")
   const [query, setQuery] = useState("")
+  const [tones, setTones] = useState<Record<string, Tone | null>>({})
+  const [closed, setClosed] = useState<
+    Partial<Record<MarketGroup["key"], boolean>>
+  >({})
+  const onTone = useCallback(
+    (id: string, tone: Tone | null) =>
+      setTones((t) => (t[id] === tone ? t : { ...t, [id]: tone })),
+    []
+  )
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return list.filter((u) => (filter === "all" || u.id.startsWith(`${filter}:`)) && (!q || u.name.toLowerCase().includes(q) || instrumentName(u.id, u.name).toLowerCase().includes(q)))
+    return list.filter(
+      (u) =>
+        (filter === "all" || u.id.startsWith(`${filter}:`)) &&
+        (!q ||
+          u.name.toLowerCase().includes(q) ||
+          instrumentName(u.id, u.name).toLowerCase().includes(q))
+    )
   }, [list, filter, query])
+
+  const commodities = useMemo(
+    () =>
+      list
+        .filter((u) => u.id.startsWith("mcx:") && !leaderOf(u.id))
+        .sort((a, b) => commodityRank(a.id) - commodityRank(b.id)),
+    [list]
+  )
+  const commodityRows = useMemo(
+    () => commodityItems(commodities),
+    [commodities]
+  )
+
+  // Indices in the cards' order; commodities by nearest expiry (the universe's order), each mini under its leader.
+  const groups = useMemo(
+    () =>
+      GROUPS.map((group) => {
+        const members = rows.filter((u) => groupOf(u.id) === group.key)
+        if (group.key === "index")
+          members.sort((a, b) => featuredRank(a.id) - featuredRank(b.id))
+        return { group, members, families: familiesOf(members) }
+      }).filter((g) => g.members.length > 0),
+    [rows]
+  )
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title="Markets" note="Change is measured against the previous close." />
+      <PageHeader
+        title="Markets"
+        note="Prices in INR. Every change is against the previous close."
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-        <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-6 pt-5 pb-8">
-          <section aria-labelledby="indices-heading" className="flex flex-col gap-3">
-            <h2 id="indices-heading" className="type-heading">
-              Indices
-            </h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {FEATURED.map((index) => (
-                <IndexCard key={index.id} index={index} />
-              ))}
-            </div>
-          </section>
+        <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-1.5 pt-2 pb-8">
+          {/* Indices, commodities and the world side by side on a wide screen; two columns with the world under them on a laptop; one on a phone. Each is a QuantDesk container: a folder tab over its plate. */}
+          <div className="grid gap-3 lg:grid-cols-2 lg:gap-1.5 xl:grid-cols-3">
+            <Folder
+              title="Indian indices"
+              count={INDIA_ITEMS.length}
+              aside={
+                <>
+                  <span className="hidden type-meta md:inline">Spot</span>
+                  <Breadth ids={INDIA_ITEMS.map((i) => i.id)} tones={tones} />
+                </>
+              }
+            >
+              <OverviewPanel
+                panelKey="india"
+                label="Indian indices"
+                items={INDIA_ITEMS}
+                onTone={onTone}
+              />
+            </Folder>
 
-          <section aria-labelledby="instruments-heading" className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <h2 id="instruments-heading" className="type-heading">
-                Instruments with options
-              </h2>
-              <span className="num type-meta">{loading ? "" : `${rows.length} of ${list.length}`}</span>
-              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-                <Segmented value={filter} onChange={setFilter} label="Exchange" items={[{ value: "all", label: "All" }, { value: "nse", label: "NSE" }, { value: "bse", label: "BSE" }, { value: "mcx", label: "MCX" }]} />
-                <InputGroup className="w-full sm:w-48">
-                  <InputGroupAddon>
-                    <SearchIcon />
-                  </InputGroupAddon>
-                  <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter" aria-label="Filter instruments" />
-                </InputGroup>
-              </div>
-            </div>
+            <Folder
+              title="MCX commodities"
+              count={loading ? "" : commodities.length}
+              aside={
+                <>
+                  <span className="hidden type-meta md:inline">Nearest future</span>
+                  <Breadth ids={commodities.map((u) => u.id)} tones={tones} />
+                </>
+              }
+            >
+              <OverviewPanel
+                panelKey="mcx"
+                label="MCX commodities"
+                items={commodityRows}
+                loading={loading}
+                onTone={onTone}
+              />
+            </Folder>
 
+            <Folder
+              title="Global markets"
+              count={8}
+              className="lg:col-span-2 xl:col-span-1"
+              aside={<span className="hidden type-meta md:inline">Via Upstox, hours in IST</span>}
+            >
+              <WorldMarkets />
+            </Folder>
+          </div>
+
+          <section aria-label="Option instruments" className="flex flex-col">
+            <FolderTab
+              title="Option instruments"
+              count={
+                loading
+                  ? ""
+                  : rows.length === list.length
+                    ? list.length
+                    : `${rows.length} of ${list.length}`
+              }
+              aside={
+                <>
+                  <span className="hidden type-meta lg:inline">Every underlying with an option chain</span>
+                  <Segmented
+                    value={filter}
+                    onChange={setFilter}
+                    label="Exchange"
+                    items={[
+                      { value: "all", label: "All" },
+                      { value: "nse", label: "NSE" },
+                      { value: "bse", label: "BSE" },
+                      { value: "mcx", label: "MCX" },
+                    ]}
+                  />
+                  <InputGroup className="h-7 w-40 sm:w-48">
+                    <InputGroupAddon>
+                      <SearchIcon />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Filter"
+                      aria-label="Filter instruments"
+                    />
+                  </InputGroup>
+                </>
+              }
+            />
             {error ? (
-              <Empty className="rounded-lg border">
+              <Empty className="panel rounded-tl-none bg-card">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <AlertIcon />
@@ -160,31 +443,73 @@ export function MarketsPage() {
                 </EmptyHeader>
               </Empty>
             ) : !loading && rows.length === 0 ? (
-              <Empty className="rounded-lg border">
+              <Empty className="panel rounded-tl-none bg-card">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <SearchIcon />
                   </EmptyMedia>
                   <EmptyTitle>No instrument matches</EmptyTitle>
-                  <EmptyDescription>Clear the filter or pick another exchange.</EmptyDescription>
+                  <EmptyDescription>
+                    Clear the filter or pick another exchange.
+                  </EmptyDescription>
                 </EmptyHeader>
               </Empty>
             ) : (
-              <div className="overflow-hidden rounded-lg border bg-card">
+              <div className="overflow-hidden panel rounded-tl-none bg-card">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className={HEAD}>Instrument</TableHead>
+                      <TableHead className={cn(HEAD, "pl-4")}>
+                        Instrument
+                      </TableHead>
                       <TableHead className={NUM_HEAD}>Last</TableHead>
                       <TableHead className={NUM_HEAD}>Change</TableHead>
                       <TableHead className={NUM_HEAD}>Change %</TableHead>
                       <TableHead className={HEAD}>Day range</TableHead>
                       <TableHead className={NUM_HEAD}>Prev close</TableHead>
                       <TableHead className={NUM_HEAD}>Next expiry</TableHead>
-                      <TableHead className={NUM_HEAD}>Lot</TableHead>
+                      <TableHead className={cn(NUM_HEAD, "pr-4")}>
+                        Lot
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>{loading ? <SkeletonRows /> : rows.map((u) => <MarketRow key={u.id} u={u} />)}</TableBody>
+                  <TableBody>
+                    {loading ? (
+                      <SkeletonRows />
+                    ) : (
+                      groups.map(({ group, members, families }) => {
+                        const open = !closed[group.key]
+                        return (
+                          <Fragment key={group.key}>
+                            <GroupRow
+                              group={group}
+                              ids={members.map((u) => u.id)}
+                              tones={tones}
+                              open={open}
+                              onToggle={() =>
+                                setClosed((c) => ({ ...c, [group.key]: open }))
+                              }
+                            />
+                            {open
+                              ? families.map(({ leader, followers }) => (
+                                  <Fragment key={leader.id}>
+                                    <MarketRow u={leader} onTone={onTone} />
+                                    {followers.map((f) => (
+                                      <MarketRow
+                                        key={f.id}
+                                        u={f}
+                                        follower
+                                        onTone={onTone}
+                                      />
+                                    ))}
+                                  </Fragment>
+                                ))
+                              : null}
+                          </Fragment>
+                        )
+                      })
+                    )}
+                  </TableBody>
                 </Table>
               </div>
             )}

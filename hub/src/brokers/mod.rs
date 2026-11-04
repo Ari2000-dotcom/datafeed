@@ -2,6 +2,7 @@ pub mod kotak;
 pub mod nubra;
 pub mod shoonya;
 pub mod sim;
+pub mod upstox;
 
 use crate::model::{Candle, Interval, PieceKey};
 use crate::ratelimit::Limiter;

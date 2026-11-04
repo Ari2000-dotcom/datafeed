@@ -268,10 +268,11 @@ impl App {
 
         let feeds = self.stats["live"]["feeds"].clone();
         egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-            for broker in ["kotak", "nubra", "shoonya"] {
+            for broker in ["kotak", "nubra", "shoonya", "upstox"] {
                 let title = match broker {
                     "kotak" => "Kotak Neo — history (NSE/BSE)",
                     "nubra" => "Nubra — history (NSE/BSE/MCX)",
+                    "upstox" => "Upstox — global indices, USD INR, crude",
                     _ => "Shoonya — live feed",
                 };
                 egui::Frame::group(ui.style()).inner_margin(12.0).show(ui, |ui| {
@@ -295,6 +296,17 @@ impl App {
                                 }
                                 None => ("disabled in config.toml".to_string(), MUTED),
                             },
+                            "upstox" => {
+                                let st = crate::brokers::upstox::STATUS.read().clone();
+                                let c = if st.starts_with("connected") || st == "ready" {
+                                    OK
+                                } else if st.starts_with("login failed") || st.contains("refused") || st.contains("failed") {
+                                    BAD
+                                } else {
+                                    WARN
+                                };
+                                (if st.is_empty() { "starting".to_string() } else { st }, c)
+                            }
                             _ => match feeds["shoonya"].as_bool() {
                                 Some(true) => ("connected".to_string(), OK),
                                 Some(false) if crate::brokers::shoonya::LOGGING_IN.load(std::sync::atomic::Ordering::Relaxed) => {

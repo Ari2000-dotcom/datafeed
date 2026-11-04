@@ -147,7 +147,7 @@ pub async fn run_feed(hub: Arc<LiveHub>, mut rx: mpsc::UnboundedReceiver<FeedCmd
                     *turnover += traded * *px;
                     *oi = (*oi + rng.gen_range(-900.0f64..1000.0).floor()).max(0.0);
                     let ltp = (*px * 100.0).round() / 100.0;
-                    hub.publish(&Tick { id: id.clone(), ltp, volume: Some(*vol), bid: Some(ltp - 0.05), ask: Some(ltp + 0.05), oi: Some(*oi), prev_oi: None, atp: Some((*turnover / *vol * 100.0).round() / 100.0), ts_ms: now, src: "sim", replay: false });
+                    hub.publish(&Tick { id: id.clone(), ltp, volume: Some(*vol), bid: Some(ltp - 0.05), ask: Some(ltp + 0.05), oi: Some(*oi), prev_oi: None, atp: Some((*turnover / *vol * 100.0).round() / 100.0), prev_close: None, ts_ms: now, src: "sim", replay: false });
                 }
             }
         }

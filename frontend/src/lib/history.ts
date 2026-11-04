@@ -41,11 +41,16 @@ export function paced<T>(job: () => Promise<T>): Promise<T> {
     waiting.push(() => {
       running++
       go()
-    }),
+    })
   ).then(start)
 }
 
-async function fetchCandles(id: string, interval: string, from: string, to: string): Promise<Candle[]> {
+async function fetchCandles(
+  id: string,
+  interval: string,
+  from: string,
+  to: string
+): Promise<Candle[]> {
   const q = new URLSearchParams({ id, interval, from, to })
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`/history?${q}`)
@@ -53,12 +58,25 @@ async function fetchCandles(id: string, interval: string, from: string, to: stri
       await sleep(RETRY_MS[attempt]!)
       continue
     }
-    if (!res.ok) throw new Error(res.status === 429 ? "History limit reached. Try again in a moment." : `History is unavailable (HTTP ${res.status}).`)
+    if (!res.ok)
+      throw new Error(
+        res.status === 429
+          ? "History limit reached. Try again in a moment."
+          : `History is unavailable (HTTP ${res.status}).`
+      )
     const body = (await res.json()) as { pieces?: { candles?: number[][] }[] }
     const out: Candle[] = []
     for (const piece of body.pieces ?? []) {
       // A candle is [time (s), open, high, low, close, volume].
-      for (const c of piece.candles ?? []) out.push({ time: c[0]!, open: c[1]!, high: c[2]!, low: c[3]!, close: c[4]!, volume: c[5] ?? 0 })
+      for (const c of piece.candles ?? [])
+        out.push({
+          time: c[0]!,
+          open: c[1]!,
+          high: c[2]!,
+          low: c[3]!,
+          close: c[4]!,
+          volume: c[5] ?? 0,
+        })
     }
     return out.sort((a, b) => a.time - b.time)
   }
@@ -72,28 +90,39 @@ const answers = new Map<string, { at: number; candles: Promise<Candle[]> }>()
  * The live quote moves the price, change, high and low on top of them, so five minutes old is fine.
  */
 const STORE_MS = 5 * 60_000
+/** How long a stored answer may still be shown while a fresh one loads: the rest of the trading day. */
+const SHOW_STALE_MS = 12 * 60 * 60_000
 const STORE_PREFIX = "ah:h:"
 
-function readStored(key: string): Candle[] | null {
+function readStored(key: string, maxAge = STORE_MS): Candle[] | null {
   try {
     const raw = localStorage.getItem(`${STORE_PREFIX}${key}`)
     if (!raw) return null
     const { at, rows } = JSON.parse(raw) as { at: number; rows: number[][] }
-    if (Date.now() - at > STORE_MS) return null
-    return rows.map((r) => ({ time: r[0]!, open: r[1]!, high: r[2]!, low: r[3]!, close: r[4]!, volume: r[5]! }))
+    if (Date.now() - at > maxAge) return null
+    return rows.map((r) => ({
+      time: r[0]!,
+      open: r[1]!,
+      high: r[2]!,
+      low: r[3]!,
+      close: r[4]!,
+      volume: r[5]!,
+    }))
   } catch {
     return null
   }
 }
 
-/** Drops stored answers past their five minutes, so the store holds one page's worth, not every day's. */
+/** Drops stored answers older than a trading day, so the store holds today's page, not every day's. */
 function pruneStored(): void {
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const k = localStorage.key(i)
     if (!k?.startsWith(STORE_PREFIX)) continue
     try {
-      const { at } = JSON.parse(localStorage.getItem(k) ?? "{}") as { at?: number }
-      if (!at || Date.now() - at > STORE_MS) localStorage.removeItem(k)
+      const { at } = JSON.parse(localStorage.getItem(k) ?? "{}") as {
+        at?: number
+      }
+      if (!at || Date.now() - at > SHOW_STALE_MS) localStorage.removeItem(k)
     } catch {
       localStorage.removeItem(k)
     }
@@ -103,7 +132,20 @@ function pruneStored(): void {
 function writeStored(key: string, candles: Candle[]): void {
   try {
     pruneStored()
-    localStorage.setItem(`${STORE_PREFIX}${key}`, JSON.stringify({ at: Date.now(), rows: candles.map((c) => [c.time, c.open, c.high, c.low, c.close, c.volume]) }))
+    localStorage.setItem(
+      `${STORE_PREFIX}${key}`,
+      JSON.stringify({
+        at: Date.now(),
+        rows: candles.map((c) => [
+          c.time,
+          c.open,
+          c.high,
+          c.low,
+          c.close,
+          c.volume,
+        ]),
+      })
+    )
   } catch {
     // Storage full or blocked: the next load asks the hub.
   }
@@ -114,25 +156,51 @@ function writeStored(key: string, candles: Candle[]): void {
  * one instrument share a request. `bulk` queues behind the other bulk requests and is kept in
  * local storage for five minutes.
  */
-export function getCandles(id: string, interval: string, days: number, bulk = false): Promise<Candle[]> {
+export function getCandles(
+  id: string,
+  interval: string,
+  days: number,
+  bulk = false,
+  /** Skip the minute's shared answer: a chart healing a gap needs what the hub holds now. */
+  fresh = false
+): Promise<Candle[]> {
   const key = `${id}|${interval}|${days}|${istDate(Date.now())}`
   const kept = answers.get(key)
-  if (kept && Date.now() - kept.at < KEEP_MS) return kept.candles
+  if (!fresh && kept && Date.now() - kept.at < KEEP_MS) return kept.candles
   const from = istDate(Date.now() - days * DAY_MS)
   const to = istDate(Date.now())
   const stored = bulk ? readStored(key) : null
   const candles = stored
     ? Promise.resolve(stored)
     : bulk
-      ? paced(() => fetchCandles(id, interval, from, to)).then((c) => (writeStored(key, c), c))
+      ? paced(() => fetchCandles(id, interval, from, to)).then(
+          (c) => (writeStored(key, c), c)
+        )
       : fetchCandles(id, interval, from, to)
   answers.set(key, { at: Date.now(), candles })
   candles.catch(() => answers.delete(key))
   return candles
 }
 
+/**
+ * What this browser last stored for a bulk request today, however old within the day, or null. For
+ * painting a row at once while `getCandles` fetches the fresh answer.
+ */
+export function storedCandles(
+  id: string,
+  interval: string,
+  days: number
+): Candle[] | null {
+  return readStored(
+    `${id}|${interval}|${days}|${istDate(Date.now())}`,
+    SHOW_STALE_MS
+  )
+}
+
 /** Candles grouped by IST trading day, oldest first. */
-export function bySession(candles: readonly Candle[]): { date: string; candles: Candle[] }[] {
+export function bySession(
+  candles: readonly Candle[]
+): { date: string; candles: Candle[] }[] {
   const out: { date: string; candles: Candle[] }[] = []
   for (const c of candles) {
     const date = istDate(c.time * 1000)

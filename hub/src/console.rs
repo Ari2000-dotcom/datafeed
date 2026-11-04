@@ -102,6 +102,10 @@ pub fn states(state: &AppState, creds: &CredStore, nubra: &Option<Arc<Nubra>>) -
         };
         out.push((format!("nubra: {st}"), level));
     }
+    if s["live"]["feeds"]["upstox"].is_boolean() {
+        let (text, up, down) = crate::brokers::upstox::console_state();
+        out.push((text, if up { Level::Up } else if down { Level::Down } else { Level::Wait }));
+    }
     if let Some(up) = s["live"]["feeds"]["sim"].as_bool() {
         out.push(("sim: running".to_string(), if up { Level::Up } else { Level::Down }));
     }

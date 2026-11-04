@@ -243,32 +243,53 @@ export const IndicatorsIcon = ({ className }: Big) => (
   </span>
 )
 
-/** The axis the bars hang from, at the glyph's right. */
-const OiAxis = () => <path d="M22.5 5v18" opacity="0.55" />
+/*
+ * The OI views as small profiles, in the chart's own colours: puts to the left of the strike axis,
+ * calls to the right, three strikes. Bars are solid with 1px rounded ends; what is drawn differently
+ * is what the view is about (shed OI as an outline, signed exposure as a delta).
+ */
+const CALL = "var(--chart-oi-call)"
+const PUT = "var(--chart-oi-put)"
+const OiSpine = () => <path d="M14 4.5v19" stroke="currentColor" opacity="0.5" />
+function Bar({ x, y, w, color, hollow = false }: { x: number; y: number; w: number; color: string; hollow?: boolean }) {
+  return hollow ? (
+    <rect x={x + 0.5} y={y + 0.5} width={w - 1} height={3} rx={1} fill="none" stroke={color} />
+  ) : (
+    <rect x={x} y={y} width={w} height={4} rx={1} fill={color} stroke="none" />
+  )
+}
 
 export const OiTotalIcon = ({ className, ...rest }: Big) => (
   <Tv className={className} {...rest}>
-    <OiAxis />
-    <path d="M22.5 6.5h-10v3h10M22.5 12.5h-6v3h6M22.5 18.5h-14v3h14" />
+    <OiSpine />
+    <Bar x={8} y={6} w={5.5} color={PUT} />
+    <Bar x={14.5} y={6} w={8} color={CALL} />
+    <Bar x={5} y={12} w={8.5} color={PUT} />
+    <Bar x={14.5} y={12} w={6} color={CALL} />
+    <Bar x={9} y={18} w={4.5} color={PUT} />
+    <Bar x={14.5} y={18} w={9} color={CALL} />
   </Tv>
 )
 
 export const OiChangeIcon = ({ className, ...rest }: Big) => (
   <Tv className={className} {...rest}>
-    <OiAxis />
-    <path d="M22.5 12.5h-10v3h10" />
-    <g fill="currentColor" stroke="none">
-      <rect x="16" y="6" width="7" height="4" />
-      <rect x="18" y="18" width="5" height="4" />
-    </g>
+    <OiSpine />
+    <Bar x={8} y={6} w={5.5} color={PUT} />
+    <Bar x={14.5} y={6} w={6} color={CALL} hollow />
+    <Bar x={6} y={12} w={7.5} color={PUT} hollow />
+    <Bar x={14.5} y={12} w={8.5} color={CALL} />
+    <Bar x={10} y={18} w={3.5} color={PUT} />
+    <Bar x={14.5} y={18} w={5} color={CALL} />
   </Tv>
 )
 
 export const DeltaOiIcon = ({ className, ...rest }: Big) => (
   <Tv className={className} {...rest}>
-    <OiAxis />
-    <path d="M22.5 6.5h-12v3h12M22.5 12.5h-7v3h7M22.5 18.5h-4v3h4" />
-    <path d="M5 22.5 9 15.5l4 7z" strokeLinejoin="round" />
+    <path d="M17 4.5v19" stroke="currentColor" opacity="0.5" />
+    <Bar x={17.5} y={6} w={6} color={CALL} />
+    <Bar x={17.5} y={12} w={4} color={CALL} />
+    <Bar x={13} y={18} w={3.5} color={PUT} />
+    <path d="M3.5 15.5 8 7.5l4.5 8z" stroke="currentColor" strokeLinejoin="round" />
   </Tv>
 )
 

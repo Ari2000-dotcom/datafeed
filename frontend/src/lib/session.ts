@@ -25,9 +25,12 @@ export function sessions(now = Date.now()): Session[] {
   ]
 }
 
-/** Trading hours in minutes after midnight IST: NSE and BSE 09:15-15:30, MCX 09:00-23:30. */
+/**
+ * Trading hours in minutes after midnight IST: NSE and BSE 09:15-15:30, MCX 09:00-23:55 (23:30 while
+ * the US is on summer time; no bars come after it then, so the wider window costs nothing).
+ */
 export function tradingHours(id: string): { start: number; end: number } {
-  return id.startsWith("mcx:") ? { start: 9 * 60, end: 23 * 60 + 30 } : { start: 9 * 60 + 15, end: 15 * 60 + 30 }
+  return id.startsWith("mcx:") ? { start: 9 * 60, end: 23 * 60 + 55 } : { start: 9 * 60 + 15, end: 15 * 60 + 30 }
 }
 
 /**

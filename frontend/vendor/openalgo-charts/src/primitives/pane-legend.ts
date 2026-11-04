@@ -195,7 +195,7 @@ export interface PaneLegendOptions {
 }
 
 const ROW_H = 20;
-const GAP = 6;
+const GAP = 9;
 /** Between a large name and the readings after it on its line, as TradingView spaces its series title from O H L C. */
 const TITLE_GAP = 12;
 /** Default square side of an action button, in media px. */
@@ -542,7 +542,7 @@ export class PaneLegend implements IPrimitive {
     // the market state and the day change all render through this.
     const reading = (v: LegendValue, fallback: string, priority = 1): void => {
       const parts: Seg[] = [];
-      if (v.label !== undefined && v.label !== '') parts.push(text(v.label, dimText, false, Array.from(v.label).length === 1 ? 1 : 4));
+      if (v.label !== undefined && v.label !== '') parts.push(text(v.label, dimText, false, Array.from(v.label).length === 1 ? 3 : 4));
       parts.push(text(v.text, v.color ?? fallback, false, GAP));
       groups.push({ parts, priority: Number.isFinite(v.priority) ? v.priority! : priority, reading: priority > 0 });
     };

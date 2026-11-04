@@ -63,6 +63,12 @@ login_cmd = ["../.venv/Scripts/python.exe", "../shoonya_auto_login.py"]
 # not arriving on touchline — the feed says so by itself, once, with this line named.
 depth_feed = false
 
+[brokers.upstox]
+# The world's markets (GIFT Nifty, Dow, S&P, Nikkei, FTSE, DAX, USD INR, crude) for the website's
+# Global markets panel. Save an Upstox analytics token (or API key + PIN + TOTP secret) in the
+# app's Brokers tab; until then it stays idle.
+enabled = true
+
 [brokers.sim]
 # A simulated broker for load tests (loadtest/config.toml turns it on). Off on the live server.
 enabled = false

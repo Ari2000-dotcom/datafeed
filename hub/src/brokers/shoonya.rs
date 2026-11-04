@@ -540,6 +540,7 @@ async fn session_inner(
                     oi: entry.4,
                     prev_oi: entry.5,
                     atp: entry.6,
+                    prev_close: None,
                     ts_ms: chrono::Utc::now().timestamp_millis(),
                     src: "shoonya",
                     replay,

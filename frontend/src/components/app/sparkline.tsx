@@ -1,3 +1,5 @@
+import { useId } from "react"
+
 import { toneOf } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -11,7 +13,11 @@ const STROKE: Record<ReturnType<typeof toneOf>, string> = {
  * The session's closes as one line, with the previous close as a dashed reference. Plain SVG:
  * stretched to its box with a non-scaling stroke, so the line stays 1.5 px and crisp at any width.
  */
+/** The wash under the line, a faint fade in the move's colour so the card reads up or down at a glance. */
+const FILL: Record<ReturnType<typeof toneOf>, string> = { up: "--up", down: "--down", flat: "--subtle" }
+
 export function Sparkline({ points, reference, className }: { points: readonly number[]; reference: number | null; className?: string }) {
+  const fill = useId().replace(/:/g, "")
   const H = 40
   if (points.length < 2) return <div className={cn("h-10 w-full", className)} aria-hidden />
 
@@ -26,6 +32,13 @@ export function Sparkline({ points, reference, className }: { points: readonly n
 
   return (
     <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" className={cn("h-10 w-full overflow-visible", className)} aria-hidden>
+      <defs>
+        <linearGradient id={fill} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor={`var(${FILL[tone]})`} stopOpacity="0.16" />
+          <stop offset="1" stopColor={`var(${FILL[tone]})`} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${d}L100 ${H}L0 ${H}Z`} fill={`url(#${fill})`} stroke="none" />
       {reference !== null ? <line x1="0" x2="100" y1={y(reference)} y2={y(reference)} className="stroke-border" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" /> : null}
       <path d={d} fill="none" className={STROKE[tone]} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>

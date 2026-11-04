@@ -1,17 +1,30 @@
 import { useEffect, useRef, useState } from "react"
 import { createChart, type Chart } from "openalgo-charts"
 
-import { chartTheme, palette, priceAxisWidth, useScheme, type Palette } from "@/chart/theme"
+import {
+  chartTheme,
+  palette,
+  priceAxisWidth,
+  useScheme,
+  type Palette,
+} from "@/chart/theme"
 
 /**
  * One engine chart in a host element, created once Inter has loaded (the canvas measures its
  * text in it) and rebuilt when the page changes between dark and light. `chart` is null until
  * then, so a series is added in an effect that depends on it.
  */
-export function useChart(options?: { minBarSpacing?: number }) {
+export function useChart(options?: {
+  minBarSpacing?: number
+  /** A glance chart: no pan, zoom or double-click reset, only the crosshair. */ still?: boolean
+}) {
   const host = useRef<HTMLDivElement>(null)
-  const [state, setState] = useState<{ chart: Chart; colors: Palette } | null>(null)
+  const [state, setState] = useState<{ chart: Chart; colors: Palette } | null>(
+    null
+  )
   const scheme = useScheme()
+  const still = options?.still ?? false
+  const minBarSpacing = options?.minBarSpacing
 
   useEffect(() => {
     const element = host.current
@@ -30,12 +43,20 @@ export function useChart(options?: { minBarSpacing?: number }) {
           priceAxisWidth: priceAxisWidth(),
           crosshairSnapToBar: true,
           branding: false,
-          navigation: { mousePan: "both" },
+          navigation: still
+            ? { mousePan: "both", panEnabled: false, zoomEnabled: false }
+            : { mousePan: "both" },
+          ...(still ? { doubleClick: "none" as const } : {}),
           // The countdown only makes sense while trades come in; a closed market would count to nothing.
           axisChrome: { barCountdown: false },
           // A panel that grows or shrinks keeps the same bars in view.
           // The thinnest a bar may get, px. The default is 1; the price chart passes less so a few days of 1m bars fit.
-          timeScale: { lockVisibleTimeRangeOnResize: true, ...(options?.minBarSpacing ? { minBarSpacing: options.minBarSpacing } : {}) },
+          timeScale: {
+            lockVisibleTimeRangeOnResize: true,
+            ...(minBarSpacing
+              ? { minBarSpacing: minBarSpacing }
+              : {}),
+          },
         })
         setState({ chart: created, colors })
       })
@@ -54,7 +75,7 @@ export function useChart(options?: { minBarSpacing?: number }) {
       created?.destroy()
       setState(null)
     }
-  }, [scheme])
+  }, [scheme, still, minBarSpacing])
 
   return { host, chart: state?.chart ?? null, colors: state?.colors ?? null }
 }

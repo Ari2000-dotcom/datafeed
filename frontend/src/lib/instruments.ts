@@ -50,6 +50,49 @@ const NAMES: Record<string, string> = {
   "mcx:silverm": "Silver mini",
 }
 
+/**
+ * A mini contract sits under the contract it follows: same commodity, smaller lot. The table shows
+ * the leader's row and its followers indented beneath it, so "Gold" and "Gold mini" read as one family.
+ */
+const LEADER: Record<string, string> = {
+  "mcx:crudeoilm": "mcx:crudeoil",
+  "mcx:natgasmini": "mcx:naturalgas",
+  "mcx:goldm": "mcx:gold",
+  "mcx:silverm": "mcx:silver",
+}
+
+/** The contract an instrument follows, if it is a mini of one. */
+export function leaderOf(id: string): string | undefined {
+  return LEADER[id]
+}
+
+export interface MarketGroup {
+  key: "index" | "commodity"
+  title: string
+  note: string
+}
+
+export const GROUPS: readonly MarketGroup[] = [
+  { key: "index", title: "Index options", note: "NSE and BSE, cash settled" },
+  { key: "commodity", title: "Commodity options", note: "MCX, on the future" },
+]
+
+export const groupOf = (id: string): MarketGroup["key"] => (id.startsWith("mcx:") ? "commodity" : "index")
+
+/** The commodities with a card, in a broker's usual order: energy, then bullion, then base metals. Minis follow their leader in the table only. */
+const COMMODITY_ORDER = ["mcx:crudeoil", "mcx:naturalgas", "mcx:gold", "mcx:silver", "mcx:copper", "mcx:zinc"]
+
+export const commodityRank = (id: string): number => {
+  const at = COMMODITY_ORDER.indexOf(id)
+  return at < 0 ? COMMODITY_ORDER.length : at
+}
+
+/** Where an index sits in the featured order, so the table lists Nifty 50 first, as the cards do. */
+export const featuredRank = (id: string): number => {
+  const at = FEATURED.findIndex((f) => f.id === id)
+  return at < 0 ? FEATURED.length : at
+}
+
 /** The reading name of an instrument; an unknown one is its symbol with a capital. */
 export function instrumentName(id: string, symbol?: string): string {
   const known = NAMES[id]

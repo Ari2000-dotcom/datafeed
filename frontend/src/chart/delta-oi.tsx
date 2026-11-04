@@ -28,6 +28,7 @@ import { hub } from "@/lib/hub"
 import { nearestStrike, useChain, type ChainStrike } from "@/lib/use-chain"
 import { useQuote } from "@/lib/use-hub"
 import { useNow } from "@/lib/use-now"
+import { FolderTab } from "@/components/app/folder"
 import { cn } from "@/lib/utils"
 
 const BANDS = [5, 10, 20] as const
@@ -516,18 +517,17 @@ export function DeltaOiPanel({
 >[0]) {
   const { ref, full, toggle } = useFullscreen<HTMLElement>()
   return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col" onPointerDownCapture={onActivate}>
+    <FolderTab title="Delta × OI" active={active} />
     <section
       ref={ref}
       aria-label="Delta × OI"
       data-active={active || undefined}
       onPointerDownCapture={onActivate}
       onFocusCapture={onActivate}
-      className={cn(
-        "@container/chart flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background transition-colors",
-        active ? "border-primary ring-1 ring-primary/60" : "hover:border-input"
-      )}
+      className="@container/chart flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden panel rounded-tl-none bg-background"
     >
-      <div className="flex h-[38px] shrink-0 items-center gap-x-3 overflow-hidden border-b bg-chart-toolbar px-1.5">
+      <div className="panel-head flex h-[38px] shrink-0 items-center gap-x-3 overflow-hidden bg-chart-toolbar px-1.5">
         <div className="flex shrink-0 items-center gap-x-0.5">{toolbar}</div>
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <FullscreenButton full={full} onToggle={toggle} />
@@ -537,5 +537,6 @@ export function DeltaOiPanel({
         <DeltaOiBoard {...board} />
       </div>
     </section>
+    </div>
   )
 }

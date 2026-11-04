@@ -24,6 +24,11 @@ pub const FIELDS: &[(&str, &str, &str, bool)] = &[
     ("shoonya", "SHOONYA_API_SECRET", "API secret", true),
     ("shoonya", "SHOONYA_ACCESS_TOKEN", "Access token (filled by login)", true),
     ("shoonya", "SHOONYA_ACTID", "Account id (filled by login)", false),
+    ("upstox", "UPSTOX_ANALYTICS_TOKEN", "Analytics token (1 year; enough on its own)", true),
+    ("upstox", "UPSTOX_API_KEY", "API key (for TOTP login)", false),
+    ("upstox", "UPSTOX_PIN", "6-digit PIN (for TOTP login)", true),
+    ("upstox", "UPSTOX_TOTP_SECRET", "TOTP secret (base32, for TOTP login)", true),
+    ("upstox", "UPSTOX_ACCESS_TOKEN", "Access token (filled by login)", true),
     ("alerts", "TELEGRAM_BOT_TOKEN", "Telegram bot token", true),
     ("alerts", "TELEGRAM_CHAT_ID", "Telegram chat id", false),
 ];
@@ -114,7 +119,7 @@ impl CredStore {
     /// Headless mode: the .env file is the source of truth, so its values replace
     /// saved ones — except tokens the hub fills in itself, which .env only seeds.
     pub fn reload_env(&self, path: &Path) -> Result<usize, String> {
-        const AUTO_FILLED: [&str; 2] = ["SHOONYA_ACCESS_TOKEN", "SHOONYA_ACTID"];
+        const AUTO_FILLED: [&str; 3] = ["SHOONYA_ACCESS_TOKEN", "SHOONYA_ACTID", "UPSTOX_ACCESS_TOKEN"];
         let iter = dotenvy::from_path_iter(path).map_err(|e| e.to_string())?;
         let updates: Vec<(String, String)> = iter
             .flatten()

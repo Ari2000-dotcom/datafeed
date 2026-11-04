@@ -80,6 +80,19 @@ struct BrokersCfg {
     nubra: NubraCfg,
     shoonya: ShoonyaCfg,
     sim: SimCfg,
+    /// Optional in config.toml: on unless a [brokers.upstox] section turns it off.
+    #[serde(default)]
+    upstox: UpstoxCfg,
+}
+/// Upstox: the world's markets (global indices, USD INR, crude). Idle until credentials are saved.
+#[derive(Deserialize)]
+struct UpstoxCfg {
+    enabled: bool,
+}
+impl Default for UpstoxCfg {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 #[derive(Deserialize)]
 struct KotakCfg {
@@ -225,7 +238,7 @@ async fn start_hub(logs: Arc<Mutex<VecDeque<String>>>) -> anyhow::Result<Hub> {
     // ---- live feeds ----
     let mut feed_tx = HashMap::new();
     let mut feed_rx = HashMap::new();
-    for (name, on) in [("shoonya", cfg.brokers.shoonya.enabled), ("sim", sim.is_some())] {
+    for (name, on) in [("shoonya", cfg.brokers.shoonya.enabled), ("sim", sim.is_some()), ("upstox", cfg.brokers.upstox.enabled)] {
         if on {
             let (tx, rx) = mpsc::unbounded_channel();
             feed_tx.insert(name, tx);
@@ -239,6 +252,9 @@ async fn start_hub(logs: Arc<Mutex<VecDeque<String>>>) -> anyhow::Result<Hub> {
         let login = (!cfg.brokers.shoonya.login_cmd.is_empty())
             .then(|| brokers::shoonya::LoginCmd { cmd: cfg.brokers.shoonya.login_cmd.clone(), dir: config_dir.clone() });
         tokio::spawn(brokers::shoonya::run_feed(live.clone(), rx, creds.clone(), login));
+    }
+    if let Some(rx) = feed_rx.remove("upstox") {
+        tokio::spawn(brokers::upstox::run_feed(live.clone(), rx, creds.clone()));
     }
     if let Some(rx) = feed_rx.remove("sim") {
         tokio::spawn(brokers::sim::run_feed(live.clone(), rx, cfg.brokers.sim.tick_ms));

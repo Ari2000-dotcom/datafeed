@@ -1139,6 +1139,7 @@ mod tests {
                         oi: None,
                         prev_oi: None,
                         atp: None,
+                        prev_close: None,
                         ts_ms: now_ms(),
                         src: "test",
                         replay: false,

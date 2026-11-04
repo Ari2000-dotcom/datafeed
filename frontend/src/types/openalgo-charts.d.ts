@@ -98,6 +98,8 @@ export interface Chart {
   removePane(index: number, options?: { force?: boolean }): void
   addPrimitive(primitive: IPrimitive, paneIndex?: number): void
   removePrimitive(primitive: IPrimitive): void
+  /** A horizontal level across the plot with its own axis tag, as a reference line. */
+  addPriceLine(options: { id: string; price: number; color: string; lineWidth?: number; lineStyle?: "solid" | "dashed" | "dotted"; label?: string }, paneIndex?: number): IPrimitive
   setPriceScaleOptions(patch: { mode?: PriceScaleMode }, scope?: "primary" | "axes" | "all"): void
   /** A built-in command, as its keyboard shortcut runs it: zoomIn, zoomOut, resetScale, fitContent. */
   runCommand(command: string): boolean
@@ -157,7 +159,18 @@ export interface PaneLegendOptions {
   /** False removes the row. */
   visible?: boolean
   /** Switches for the row's parts; `title: false` leaves only the readings. */
-  statusLine?: { title?: boolean }
+  statusLine?: {
+    title?: boolean
+    marketStatus?: boolean
+    /** A plate behind the row so it reads over candles. */
+    background?: boolean
+    backgroundOpacity?: number
+    backgroundColor?: string
+  }
+  /** What the host knows and the engine does not: the session's state, read each frame. */
+  status?:
+    | { marketStatus?: LegendValue }
+    | (() => { marketStatus?: LegendValue } | null)
   /** Text size in px. */
   font?: number
   /** The name's size when it is larger than the readings on its line (TradingView: 16 over 13). */

@@ -118,6 +118,9 @@ struct QuoteMsg<'a> {
     /// The exchange's average traded price today, for the chart's ATP line.
     #[serde(skip_serializing_if = "Option::is_none")]
     atp: Option<f64>,
+    /// Yesterday's close, for instruments the site has no history of (global indices).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pc: Option<f64>,
     /// Only sent when true: the broker's last known state, not a live update.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     replay: bool,
@@ -157,6 +160,7 @@ impl LiveHub {
         let feed = match id.segment() {
             "SIM" => "sim",
             "MCX_FO" | "NSE_FO" | "BSE_FO" | "NSE_EQ" | "BSE_EQ" => "shoonya",
+            "GLOBAL_INDEX" | "GLOBAL_INDICATOR" => "upstox",
             _ => return None,
         };
         self.feeds.contains_key(feed).then_some(feed)
@@ -165,6 +169,10 @@ impl LiveHub {
     /// The broker feed id behind a topic: canonical names are looked up, raw ids used as they are.
     fn feed_id(&self, topic: &str) -> Result<InstrumentId, String> {
         let name = topic.strip_prefix("quote:").ok_or("topics start with quote:")?;
+        // The world's markets, by the hub's short names (quote:global:dji).
+        if let Some(g) = name.strip_prefix("global:") {
+            return crate::brokers::upstox::feed_id(g).ok_or_else(|| format!("unknown global instrument {g}"));
+        }
         if name.starts_with("nse:") || name.starts_with("bse:") || name.starts_with("mcx:") {
             let c = Canonical::parse(name)?;
             let inst = self.instruments.as_ref().ok_or("instrument lists are not available")?;
@@ -253,6 +261,7 @@ impl LiveHub {
                 oi: tick.oi,
                 poi: tick.prev_oi,
                 atp: tick.atp,
+                pc: tick.prev_close,
                 replay: tick.replay,
                 ts: tick.ts_ms,
                 src: tick.src,
@@ -303,6 +312,7 @@ mod tests {
             oi,
             prev_oi: None,
             atp: None,
+            prev_close: None,
             ts_ms: 1_700_000_000_000,
             src: "sim",
             replay: false,
