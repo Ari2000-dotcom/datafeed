@@ -1,0 +1,33 @@
+[
+  { "id": "et-markets", "name": "ET Markets", "region": "India", "kind": "markets", "url": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms" },
+  { "id": "et-stocks", "name": "ET Markets", "region": "India", "kind": "markets", "url": "https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms" },
+  { "id": "et-commodities", "name": "ET Markets", "region": "India", "kind": "markets", "url": "https://economictimes.indiatimes.com/markets/commodities/rssfeeds/1808152121.cms" },
+  { "id": "mint-markets", "name": "Mint", "region": "India", "kind": "markets", "url": "https://www.livemint.com/rss/markets" },
+  { "id": "mint-companies", "name": "Mint", "region": "India", "kind": "markets", "url": "https://www.livemint.com/rss/companies" },
+  { "id": "bs-markets", "name": "Business Standard", "region": "India", "kind": "markets", "url": "https://www.business-standard.com/rss/markets-106.rss" },
+
+  { "id": "et-economy", "name": "ET", "region": "India", "kind": "policy", "url": "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms" },
+  { "id": "et-policy", "name": "ET", "region": "India", "kind": "policy", "url": "https://economictimes.indiatimes.com/news/economy/policy/rssfeeds/1106944246.cms" },
+  { "id": "mint-economy", "name": "Mint", "region": "India", "kind": "policy", "url": "https://www.livemint.com/rss/economy" },
+  { "id": "bs-economy", "name": "Business Standard", "region": "India", "kind": "policy", "url": "https://www.business-standard.com/rss/economy-102.rss" },
+  { "id": "rbi-press", "name": "RBI", "region": "India", "kind": "official", "url": "https://www.rbi.org.in/pressreleases_rss.xml" },
+  { "id": "gn-finance-minister", "name": "Google News", "region": "India", "kind": "policy", "url": "https://news.google.com/rss/search?q=%22finance+minister%22+OR+Sitharaman+OR+%22finance+ministry%22+when:2d&hl=en-IN&gl=IN&ceid=IN:en" },
+  { "id": "gn-rbi", "name": "Google News", "region": "India", "kind": "policy", "url": "https://news.google.com/rss/search?q=RBI+OR+%22Reserve+Bank+of+India%22+when:2d&hl=en-IN&gl=IN&ceid=IN:en" },
+  { "id": "gn-sebi", "name": "Google News", "region": "India", "kind": "policy", "url": "https://news.google.com/rss/search?q=SEBI+market+when:2d&hl=en-IN&gl=IN&ceid=IN:en" },
+  { "id": "gn-flows", "name": "Google News", "region": "India", "kind": "macro", "url": "https://news.google.com/rss/search?q=FPI+OR+FII+OR+%22foreign+investors%22+India+when:2d&hl=en-IN&gl=IN&ceid=IN:en" },
+  { "id": "gn-rupee", "name": "Google News", "region": "India", "kind": "macro", "url": "https://news.google.com/rss/search?q=rupee+dollar+when:1d&hl=en-IN&gl=IN&ceid=IN:en" },
+  { "id": "gn-trade", "name": "Google News", "region": "India", "kind": "macro", "url": "https://news.google.com/rss/search?q=tariff+OR+%22trade+deal%22+India+when:2d&hl=en-IN&gl=IN&ceid=IN:en" },
+
+  { "id": "cnbc-economy", "name": "CNBC", "region": "Global", "kind": "macro", "url": "https://www.cnbc.com/id/20910258/device/rss/rss.html" },
+  { "id": "cnbc-world", "name": "CNBC", "region": "Global", "kind": "global", "url": "https://www.cnbc.com/id/100727362/device/rss/rss.html" },
+  { "id": "cnbc-finance", "name": "CNBC", "region": "Global", "kind": "markets", "url": "https://www.cnbc.com/id/10000664/device/rss/rss.html" },
+  { "id": "marketwatch", "name": "MarketWatch", "region": "Global", "kind": "markets", "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories" },
+  { "id": "bbc-business", "name": "BBC", "region": "Global", "kind": "global", "url": "https://feeds.bbci.co.uk/news/business/rss.xml" },
+  { "id": "reuters-markets", "name": "Reuters", "region": "Global", "kind": "markets", "url": "https://news.google.com/rss/search?q=site:reuters.com+markets+when:1d&hl=en-US&gl=US&ceid=US:en" },
+  { "id": "bloomberg-markets", "name": "Bloomberg", "region": "Global", "kind": "markets", "url": "https://news.google.com/rss/search?q=site:bloomberg.com+markets+when:1d&hl=en-US&gl=US&ceid=US:en" },
+  { "id": "gn-fed", "name": "Google News", "region": "Global", "kind": "macro", "url": "https://news.google.com/rss/search?q=%22Federal+Reserve%22+OR+Powell+OR+FOMC+when:2d&hl=en-US&gl=US&ceid=US:en" },
+  { "id": "gn-crude", "name": "Google News", "region": "Global", "kind": "macro", "url": "https://news.google.com/rss/search?q=%22oil+prices%22+OR+OPEC+OR+Brent+when:1d&hl=en-US&gl=US&ceid=US:en" },
+  { "id": "gn-yields", "name": "Google News", "region": "Global", "kind": "macro", "url": "https://news.google.com/rss/search?q=%22Treasury+yields%22+OR+%22dollar+index%22+when:1d&hl=en-US&gl=US&ceid=US:en" },
+  { "id": "gn-geopolitics", "name": "Google News", "region": "Global", "kind": "global", "url": "https://news.google.com/rss/search?q=(Iran+OR+Israel+OR+Russia+OR+Ukraine+OR+sanctions)+oil+markets+when:1d&hl=en-US&gl=US&ceid=US:en" },
+  { "id": "gn-china", "name": "Google News", "region": "Global", "kind": "macro", "url": "https://news.google.com/rss/search?q=China+economy+OR+stimulus+OR+PBOC+when:2d&hl=en-US&gl=US&ceid=US:en" }
+]

@@ -132,9 +132,9 @@ export function useUniverse(): UniverseState {
           list,
           loading: false,
           error:
-            list.length === 0 ? "The feed has no instruments to list." : null,
+            list.length === 0 ? "No markets are available right now." : null,
         }),
-      (e: unknown) =>
+      () =>
         !cancelled &&
         // Today's stored list stays on screen when a refresh fails; only an empty page shows the error.
         setState((s) =>
@@ -143,10 +143,7 @@ export function useUniverse(): UniverseState {
             : {
                 list: [],
                 loading: false,
-                error:
-                  e instanceof Error
-                    ? e.message
-                    : "Could not load instruments.",
+                error: "Markets could not be loaded. Please try again.",
               }
         )
     )

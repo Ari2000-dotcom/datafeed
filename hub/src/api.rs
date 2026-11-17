@@ -18,10 +18,12 @@
 //!   → {"op":"oi_profile","req":"o1","underlying":"nse:nifty","expiries":["2026-10-27"]}            now
 //!   → {"op":"oi_profile","req":"o1","underlying":"nse:nifty","expiries":["2026-10-27"],"date":"2026-10-23","band":10,"forward":23480.5}
 //!   ← {"t":"oi_profile","req":"o1","at":ms,"prev_at":ms,"strikes":[...],"call":[...],"put":[...],"call_prev":[...],"put_prev":[...]}
+//!   → {"op":"oi_series","req":"o2","underlying":"nse:nifty","expiry":"2026-10-27","band":10,"forward":23480.5,"step":5}
+//!   ← {"t":"oi_series","req":"o2","day":"2026-10-23","at":[ms,...],"strikes":[...],"call":[[...],...],"put":[[...],...]}
 //!   ← {"t":"q","topic":"quote:nse:nifty",...}   live quote (same bytes for every subscriber)
 //!   ← {"t":"hist","req":"r1","day":"...","src":"kotak","candles":[[ts,o,h,l,c,v],...]}
 //!   ← {"t":"hist_done","req":"r1","ok":N,"failed":M}
-//! REST: GET /health, GET /stats (this machine only), GET /history?id=&interval=&from=&to=,
+//! REST: GET /health, GET /stats (this machine only), GET /news[?id=] (news.rs), GET /history?id=&interval=&from=&to=,
 //!       GET /straddle_history?underlying=&expiry=&date=
 //! Answers about days that are over carry Cache-Control, so a browser (or a
 //! CDN in front) keeps them and asking again costs the hub nothing.
@@ -98,6 +100,7 @@ pub fn router(state: AppState) -> Router {
         .route("/stats", get(stats))
         .route("/history", get(history_rest))
         .route("/straddle_history", get(straddle_history_rest))
+        .route("/news", get(crate::news::news))
         .route("/auth", get(auth))
         .route("/ws", get(ws_upgrade))
         .with_state(state)
@@ -436,6 +439,17 @@ enum Op {
         #[serde(default)]
         forward: Option<f64>,
     },
+    /// The latest session's OI through the day, `band` strikes either side of `forward`, every
+    /// `step` minutes (five by default): the Delta × OI board's day line (`OiProfiles::series`).
+    OiSeries {
+        req: String,
+        underlying: String,
+        expiry: NaiveDate,
+        band: u32,
+        forward: f64,
+        #[serde(default)]
+        step: Option<u32>,
+    },
 }
 
 fn text(v: serde_json::Value) -> Message {
@@ -559,6 +573,30 @@ async fn client(socket: WebSocket, s: AppState, conn: Conn) {
                             let mut m = (*v).clone();
                             if let Some(o) = m.as_object_mut() {
                                 o.insert("t".into(), serde_json::json!("oi_profile"));
+                                o.insert("req".into(), serde_json::json!(req));
+                                o.insert("underlying".into(), serde_json::json!(underlying));
+                            }
+                            m
+                        }
+                        Err(e) => serde_json::json!({"t": "err", "req": req, "error": e}),
+                    };
+                    let _ = ctl.send(text(reply)).await;
+                });
+            }
+            Op::OiSeries { req, underlying, expiry, band, forward, step } => {
+                let Some(oi) = s.oi.clone() else {
+                    let _ = ctl.try_send(text(serde_json::json!({"t": "err", "req": req, "error": "the OI series needs Nubra"})));
+                    continue;
+                };
+                // Shared a minute per strike range (oi_profile.rs), like the OI profile; not charged
+                // against the visitor's history allowance.
+                let ctl = ctl.clone();
+                tokio::spawn(async move {
+                    let reply = match oi.series(&underlying, expiry, band, forward, step.unwrap_or(5)).await {
+                        Ok(v) => {
+                            let mut m = (*v).clone();
+                            if let Some(o) = m.as_object_mut() {
+                                o.insert("t".into(), serde_json::json!("oi_series"));
                                 o.insert("req".into(), serde_json::json!(req));
                                 o.insert("underlying".into(), serde_json::json!(underlying));
                             }

@@ -16,6 +16,7 @@ mod history;
 mod instruments;
 mod live;
 mod model;
+mod news;
 mod oi_profile;
 mod ratelimit;
 mod secure_store;

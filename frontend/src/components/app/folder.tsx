@@ -60,7 +60,7 @@ export function Folder({
       <FolderTab title={title} count={count} aside={aside} active={active} />
       <div
         data-active={active || undefined}
-        className={cn("panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-tl-none bg-card", plateClassName)}
+        className={cn("panel flex min-h-0 flex-1 flex-col overflow-hidden bg-card", plateClassName)}
       >
         {children}
       </div>

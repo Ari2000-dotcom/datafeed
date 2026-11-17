@@ -21,7 +21,7 @@ const TRIGGER =
 
 /** The instrument, as a name you can click to change: no box, the way a chart's symbol sits in its header. */
 export function UnderlyingPicker({ value, list, onChange, compact }: { value: string; list: readonly Underlying[]; onChange: (id: string) => void; compact?: boolean }) {
-  const items = list.length > 0 ? list : [{ id: value, name: (value.split(":")[1] ?? value).toUpperCase() }]
+  const items = list.length > 0 ? list : [{ id: value, name: instrumentName(value) }]
   const current = items.find((u) => u.id === value)
   return (
     <DropdownMenu>

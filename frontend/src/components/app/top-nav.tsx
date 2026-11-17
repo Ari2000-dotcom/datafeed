@@ -18,19 +18,18 @@ const NAV = [
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
 
-/** Tabs along the bar, the active one marked by a line on the bar's bottom edge. */
+/** Tabs along the bar, the active one marked by a filled pill. */
 function NavTab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
     <a
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "relative flex h-10 shrink-0 items-center px-3 text-sm font-medium whitespace-nowrap outline-none sm:px-3 transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset",
-        active ? "text-foreground" : "text-muted-foreground",
+        "relative flex h-7 shrink-0 items-center rounded-md px-2.5 text-[13px] whitespace-nowrap outline-none transition-colors duration-150 hover:bg-selection hover:text-foreground focus-visible:text-foreground active:translate-y-px",
+        active ? "bg-selection text-foreground" : "text-muted-foreground",
       )}
     >
       {children}
-      {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 bg-primary" aria-hidden /> : null}
     </a>
   )
 }
@@ -63,12 +62,12 @@ function ThemeMenu() {
 export function TopNav({ onSearch, stripHidden, onShowStrip }: { onSearch: () => void; stripHidden: boolean; onShowStrip: () => void }) {
   const route = useRoute()
   return (
-    <header className="flex h-10 shrink-0 items-center gap-1 border-b bg-chrome pr-2 pl-3">
-      <a href={hrefOf.markets()} className="mr-4 flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="AlphaHedge, home">
+    <header className="flex h-11 shrink-0 items-center gap-1 bg-chrome pr-2 pl-3">
+      <a href={hrefOf.markets()} className="mr-4 flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-ring" aria-label="AlphaHedge, home" translate="no">
         <Logo />
-        <span className="hidden text-[17px] leading-none font-semibold tracking-[-0.02em] sm:inline">Alpha<span className="text-[#9a9cff]">Hedge</span></span>
+        <span className="hidden font-heading text-[17px] leading-none font-semibold tracking-[-0.01em] sm:inline">Alpha<span className="text-primary">Hedge</span></span>
       </a>
-      <nav aria-label="Primary" className="flex items-center">
+      <nav aria-label="Primary" className="flex items-center gap-0.5">
         {NAV.map((item) => (
           <NavTab key={item.name} href={item.href} active={route.name === item.name}>
             <span className="sm:hidden">{item.short}</span>
@@ -97,11 +96,14 @@ export function TopNav({ onSearch, stripHidden, onShowStrip }: { onSearch: () =>
           type="button"
           onClick={onSearch}
           aria-label="Search instruments"
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center gap-1.5 rounded-md bg-seg-track text-[13px] text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring md:w-36 md:justify-start md:pr-1 md:pl-2"
+          className="group inline-flex h-7 w-7 shrink-0 items-center justify-center gap-2 rounded-md bg-seg-track text-[13px] text-muted-foreground outline-none transition-colors duration-150 hover:bg-selection hover:text-foreground md:w-56 md:justify-start md:pr-2 md:pl-2.5"
         >
           <SearchIcon />
           <span className="hidden md:inline">Search</span>
-          <Kbd className="ml-auto hidden md:inline-flex">{isMac ? "⌘K" : "Ctrl K"}</Kbd>
+          {/* The shortcut as a keycap outline, not a filled block: a hairline edge, smaller corners than the field. */}
+          <Kbd className="ml-auto hidden h-[18px] rounded-[4px] border border-separator-strong bg-transparent px-1.5 text-[11px] font-normal text-subtle transition-colors duration-150 group-hover:text-muted-foreground md:inline-flex">
+            {isMac ? "⌘K" : "Ctrl K"}
+          </Kbd>
         </button>
         <div className="hidden lg:block">
           <StatusCluster />

@@ -116,12 +116,12 @@ export function ChartFrame({
       data-active={active || undefined}
       onPointerDownCapture={onActivate}
       onFocusCapture={onActivate}
-      className="@container/chart flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden panel rounded-tl-none bg-chart"
+      className="@container/chart flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden panel bg-chart"
     >
       {/* One row, always: pieces marked data-drop give way as the container narrows (useFitRow), and what is still too wide is clipped, never wrapped. */}
       <div
         ref={fitBar}
-        className="chart-bar panel-head flex h-[38px] shrink-0 items-center gap-x-3 overflow-hidden bg-chart-toolbar px-1.5"
+        className="chart-bar panel-head [--panel-rule:var(--separator-strong)] flex h-[38px] shrink-0 items-center gap-x-3 overflow-hidden bg-chart-toolbar px-1.5"
       >
         {/* At the narrowest the lead clips, not the tools on the right: those (more, full screen) are never cut off. */}
         <div className="flex min-w-0 items-center gap-x-0.5 overflow-hidden">
@@ -167,7 +167,7 @@ export function ChartFrame({
         ) : null}
       </div>
       {footer ? (
-        <div className="flex h-7 shrink-0 items-center gap-0.5 border-t bg-chart-toolbar px-1.5 text-xs">
+        <div className="flex h-7 shrink-0 items-center gap-0.5 border-t border-separator-strong bg-chart-toolbar px-1.5 text-xs">
           {footer}
         </div>
       ) : null}

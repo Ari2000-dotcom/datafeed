@@ -36,9 +36,9 @@ const KIND_ICON: Record<Kind, ReactNode> = {
 function KindMenu({ kind, onKind }: { kind: Kind; onKind: (kind: Kind) => void }) {
   return (
     <DropdownMenu>
-      <Tip label="What this container shows">
+      <Tip label="Chart type">
         <DropdownMenuTrigger asChild>
-          <ToolButton aria-label="Change what this container shows" className="pr-1">
+          <ToolButton aria-label="Change chart type" className="pr-1">
             {KIND_ICON[kind]}
             <ChevronDownIcon size={12} />
           </ToolButton>
@@ -127,13 +127,13 @@ class Guard extends Component<{ children: ReactNode }, { error: Error | null }> 
   render() {
     if (!this.state.error) return this.props.children
     return (
-      <Empty className="min-w-0 flex-1 rounded-lg border bg-card">
+      <Empty className="min-w-0 flex-1 panel bg-card">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <AlertIcon />
           </EmptyMedia>
-          <EmptyTitle>This container could not be drawn</EmptyTitle>
-          <EmptyDescription>{this.state.error.message}</EmptyDescription>
+          <EmptyTitle>This chart could not be shown</EmptyTitle>
+          <EmptyDescription>Something went wrong while drawing it. Reload the panel to try again.</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
           <Button variant="outline" size="sm" onClick={() => this.setState({ error: null })}>
@@ -298,7 +298,7 @@ export function ChartsPage({ route }: { route: Extract<Route, { name: "charts" }
   const stacked = width > 0 && width < STACK_BELOW
 
   return (
-    <div ref={page} className="flex h-full min-h-0 flex-col overflow-auto bg-background p-1.5">
+    <div ref={page} className="flex h-full min-h-0 flex-col overflow-auto bg-background p-3">
       {loading ? (
         <div className="flex flex-1 flex-col gap-2" aria-busy="true">
           <Skeleton className="h-16 w-full" />

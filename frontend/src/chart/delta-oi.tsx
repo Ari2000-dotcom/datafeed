@@ -23,10 +23,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { delta76, impliedVol, yearsToExpiry } from "@/lib/black76"
-import { expiryLabel, fmt0, fmt2, MINUS, toneOf } from "@/lib/format"
+import { expiryLabel, fmt0, fmt2, istDate, MINUS, toneOf } from "@/lib/format"
 import { hub } from "@/lib/hub"
 import { nearestStrike, useChain, type ChainStrike } from "@/lib/use-chain"
 import { useQuote } from "@/lib/use-hub"
+import { useDayHistory, type DayHistory } from "@/lib/delta-oi-day"
 import { useNow } from "@/lib/use-now"
 import { FolderTab } from "@/components/app/folder"
 import { cn } from "@/lib/utils"
@@ -55,6 +56,12 @@ interface Row {
   /** Delta times open interest; the put's is negative. */
   callDoi: number | null
   putDoi: number | null
+  /** Open interest added (or shed) today: now against yesterday's close. */
+  callChg: number | null
+  putChg: number | null
+  /** Delta times today's OI change: the exposure written or closed today. */
+  callDoiDay: number | null
+  putDoiDay: number | null
   atm: boolean
 }
 
@@ -66,6 +73,9 @@ interface Board {
   putTotal: number
   callOi: number
   putOi: number
+  /** Today's share of the totals: delta times the OI change since yesterday. */
+  callDay: number
+  putDay: number
   covered: number
 }
 
@@ -135,6 +145,8 @@ function compute(
   let putTotal = 0
   let callOi = 0
   let putOi = 0
+  let callDay = 0
+  let putDay = 0
   let covered = 0
   const rows = window.map((r): Row => {
     const cq = q(r.call)
@@ -159,10 +171,16 @@ function compute(
       putDelta !== null && putOiV !== null
         ? putDelta * putOiV * multiplier
         : null
+    const callChg = callOiV !== null && cq?.poi !== undefined ? callOiV - cq.poi : null
+    const putChg = putOiV !== null && pq?.poi !== undefined ? putOiV - pq.poi : null
+    const callDoiDay = callDelta !== null && callChg !== null ? callDelta * callChg * multiplier : null
+    const putDoiDay = putDelta !== null && putChg !== null ? putDelta * putChg * multiplier : null
     if (callDoi !== null) callTotal += callDoi
     if (putDoi !== null) putTotal += putDoi
     if (callOiV !== null) callOi += callOiV * multiplier
     if (putOiV !== null) putOi += putOiV * multiplier
+    if (callDoiDay !== null) callDay += callDoiDay
+    if (putDoiDay !== null) putDay += putDoiDay
     if (callDoi !== null && putDoi !== null) covered++
     return {
       strike: r.strike,
@@ -172,6 +190,10 @@ function compute(
       putDelta,
       callDoi,
       putDoi,
+      callChg,
+      putChg,
+      callDoiDay,
+      putDoiDay,
       atm: r.strike === atmStrike,
     }
   })
@@ -186,7 +208,7 @@ function compute(
         at = i
     rows.forEach((r, i) => (r.atm = i === at))
   }
-  return { rows, forward, atmIv, callTotal, putTotal, callOi, putOi, covered }
+  return { rows, forward, atmIv, callTotal, putTotal, callOi, putOi, callDay, putDay, covered }
 }
 
 function Stat({
@@ -214,42 +236,281 @@ function Stat({
 const HEAD = "h-9 px-3 type-label"
 const CELL = "h-9 px-3 py-0"
 
-/** A bar growing from the strike outward, scaled to the board's largest exposure, with its figure on it. */
-function ExposureCell({
-  value,
-  scale,
-  side,
-}: {
-  value: number | null
-  scale: number
-  side: "call" | "put"
-}) {
-  const width =
-    value !== null && scale > 0
-      ? Math.min(100, (Math.abs(value) / scale) * 100)
-      : 0
+// --- the net (day) view ----------------------------------------------------------------------------
+
+interface Sample {
+  /** Minute, ms. */
+  t: number
+  call: number
+  put: number
+}
+
+const SAMPLE_CAP = 480
+
+/**
+ * The totals through the day, one point a minute while the board is open. Kept in this browser for
+ * the day (a convenience, nothing on the server), so coming back to the board continues the line.
+ */
+function useDaySeries(key: string, board: Board | null, beat: number): Sample[] {
+  const day = new Date(beat + 330 * 60_000).toISOString().slice(0, 10)
+  const storeKey = `ah:doi:${key}:${day}`
+  const minute = Math.floor(beat / 60_000) * 60_000
+  // Read on the board's one-second clock, so a point written this minute shows on the next beat.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const samples = useMemo(() => readSamples(storeKey), [storeKey, beat])
+
+  useEffect(() => {
+    if (!board || board.covered === 0) return
+    const kept = readSamples(storeKey)
+    if (kept.at(-1)?.t === minute) return
+    try {
+      localStorage.setItem(storeKey, JSON.stringify([...kept, { t: minute, call: board.callTotal, put: board.putTotal }].slice(-SAMPLE_CAP)))
+    } catch {
+      // Not kept: storage is full or blocked; the board still shows its totals.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minute, storeKey, board?.covered])
+  return samples
+}
+
+function readSamples(storeKey: string): Sample[] {
+  try {
+    const raw = localStorage.getItem(storeKey)
+    return raw ? (JSON.parse(raw) as Sample[]) : []
+  } catch {
+    return []
+  }
+}
+
+/** A line or two through the day on a shared scale, drawn in SVG: crisp at any width, a zero rule when the values cross it. */
+function DayLines({ lines, height = 120, zero = false }: { lines: { values: number[]; color: string; label: string }[]; height?: number; zero?: boolean }) {
+  const all = lines.flatMap((l) => l.values)
+  const n = Math.max(...lines.map((l) => l.values.length))
+  if (n < 2) return null
+  let lo = Math.min(...all, zero ? 0 : Infinity)
+  let hi = Math.max(...all, zero ? 0 : -Infinity)
+  if (hi === lo) {
+    hi += 1
+    lo -= 1
+  }
+  const pad = (hi - lo) * 0.08
+  lo -= pad
+  hi += pad
+  const x = (i: number) => (i / (n - 1)) * 100
+  const y = (v: number) => ((hi - v) / (hi - lo)) * 100
   return (
-    <TableCell className={cn(CELL, "w-[24%] min-w-40")}>
-      <div className="relative flex h-5 items-center">
-        <div
-          className={cn(
-            "absolute inset-y-0 rounded-sm",
-            side === "call" ? "right-0 bg-up/30" : "left-0 bg-down/30"
-          )}
-          style={{ width: `${width}%` }}
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full" style={{ height }} aria-hidden>
+      {zero && lo < 0 && hi > 0 ? <line x1="0" x2="100" y1={y(0)} y2={y(0)} className="stroke-separator-strong" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" /> : null}
+      {lines.map((l) => (
+        <polyline
+          key={l.label}
+          fill="none"
+          stroke={l.color}
+          strokeWidth={1.75}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+          points={l.values.map((v, i) => `${x(i)},${y(v)}`).join(" ")}
         />
-        <span
-          className={cn(
-            "relative z-0 w-full num text-xs",
-            side === "call" ? "text-right" : "text-left"
-          )}
-        >
-          {value !== null ? signedCompact(value) : "-"}
+      ))}
+    </svg>
+  )
+}
+
+function Legend({ items }: { items: { color: string; label: string }[] }) {
+  return (
+    <span className="flex items-center gap-3 type-meta">
+      {items.map((i) => (
+        <span key={i.label} className="flex items-center gap-1.5">
+          <span className="h-0.5 w-3 rounded-full" style={{ background: i.color }} />
+          {i.label}
         </span>
+      ))}
+    </span>
+  )
+}
+
+/** One side's total, large, with what today added to it under it. */
+function SideTotal({ label, value, today, tone }: { label: string; value: number; today: number; tone: "up" | "down" }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="flex items-center gap-2 type-label">
+        <span aria-hidden className={cn("size-2 rounded-full", tone === "up" ? "bg-up" : "bg-down")} />
+        {label}
+      </span>
+      <span className="num text-[26px] leading-8 font-medium tracking-[-0.01em] text-foreground">{signedCompact(value)}</span>
+      <span className="type-meta">
+        Today <span className={cn("num", TONE_TEXT[toneOf(today)])}>{signedCompact(today)}</span>
+      </span>
+    </div>
+  )
+}
+
+/**
+ * The whole board in a few numbers: total call and put delta × OI, which side outweighs the other
+ * and by how much, what today's new open interest added, and the totals through the day.
+ */
+function NetDayView({ board, samples: recorded, history, unitWord }: { board: Board; samples: Sample[]; history: DayHistory; unitWord: string }) {
+  // The day from history where the hub has it, then this board's own minutes after its last point.
+  const fromHistory = history.kind === "ready" && history.points.length > 0
+  const lastHistory = fromHistory ? history.points[history.points.length - 1]!.t : 0
+  const samples: Sample[] = fromHistory
+    ? [...history.points, ...recorded.filter((s) => s.t > lastHistory && istDate(s.t) === history.day)]
+    : recorded
+  const net = board.callTotal + board.putTotal
+  const netDay = board.callDay + board.putDay
+  const callShare = board.callTotal + Math.abs(board.putTotal) > 0 ? board.callTotal / (board.callTotal + Math.abs(board.putTotal)) : 0.5
+  const up = "var(--up)"
+  const down = "var(--down)"
+  const since = samples[0] ? new Date(samples[0].t + 330 * 60_000).toISOString().slice(11, 16) : null
+  return (
+    <div className="flex flex-col">
+      <div className="grid gap-6 border-b px-5 py-5 @xl/chart:grid-cols-[1fr_1fr_1.1fr]">
+        <SideTotal label="Total call delta × OI" value={board.callTotal} today={board.callDay} tone="up" />
+        <SideTotal label="Total put delta × OI" value={board.putTotal} today={board.putDay} tone="down" />
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="type-label">Net</span>
+          <span className={cn("num text-[26px] leading-8 font-medium tracking-[-0.01em]", TONE_TEXT[toneOf(net)])}>{signedCompact(net)}</span>
+          <span className="type-meta">
+            {net > 0 ? "Calls outweigh puts" : net < 0 ? "Puts outweigh calls" : "Even"} · today{" "}
+            <span className={cn("num", TONE_TEXT[toneOf(netDay)])}>{signedCompact(netDay)}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* The balance: how the book splits between calls and puts, one bar. */}
+      <div className="flex flex-col gap-2 border-b px-5 py-4">
+        <div className="flex h-2.5 overflow-hidden rounded-full bg-seg-track">
+          <span className="bg-up/80 transition-[width] duration-500" style={{ width: `${callShare * 100}%` }} />
+          <span className="flex-1 bg-down/80" />
+        </div>
+        <div className="flex justify-between type-meta">
+          <span>
+            Calls <span className="num text-soft">{(callShare * 100).toFixed(1)}%</span> · {compact(board.callOi)} {unitWord} OI
+          </span>
+          <span>
+            {compact(board.putOi)} {unitWord} OI · Puts <span className="num text-soft">{((1 - callShare) * 100).toFixed(1)}%</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 px-5 py-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span data-card-title className="text-[13px]">
+            Through the day
+          </span>
+          <Legend items={[{ color: up, label: "Calls" }, { color: down, label: "Puts" }]} />
+        </div>
+        {samples.length >= 2 ? (
+          <>
+            <DayLines
+              lines={[
+                { label: "Calls", color: up, values: samples.map((s) => s.call) },
+                { label: "Puts", color: down, values: samples.map((s) => Math.abs(s.put)) },
+              ]}
+            />
+            <div className="flex items-baseline justify-between">
+              <span className="type-label">Net</span>
+              <span className="type-meta">Above the dashed line, calls outweigh puts</span>
+            </div>
+            <DayLines zero height={72} lines={[{ label: "Net", color: "var(--primary)", values: samples.map((s) => s.call + s.put) }]} />
+            <span className="type-meta">
+              {fromHistory
+                ? `From ${since} IST: open interest every 5 minutes (Nubra) with the straddle's forward and ATM vol, then live.`
+                : `One point a minute since ${since} IST, recorded while this board is open.`}
+            </span>
+          </>
+        ) : (
+          <p className="py-6 text-center type-meta">
+            {history.kind === "loading"
+              ? "Loading the day so far…"
+              : "The day's history is not available here, so the line starts now: one point a minute while this board is open."}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// --- the strike-wise view --------------------------------------------------------------------------
+
+/** A bar from the left, scaled to the board's largest exposure, its figure on it. */
+function BarCell({ value, scale, tone }: { value: number | null; scale: number; tone: "up" | "down" }) {
+  const width = value !== null && scale > 0 ? Math.min(100, (Math.abs(value) / scale) * 100) : 0
+  return (
+    <TableCell className={cn(CELL, "min-w-24")}>
+      <div className="relative flex h-5 items-center">
+        <div className={cn("absolute inset-y-0 left-0 rounded-sm", tone === "up" ? "bg-up/25" : "bg-down/25")} style={{ width: `${width}%` }} />
+        <span className="relative z-0 w-full pl-1.5 num text-xs">{value !== null ? signedCompact(value) : "-"}</span>
       </div>
     </TableCell>
   )
 }
+
+/**
+ * Strike by strike, the strike and its open interest first: what is open and what changed today on
+ * the left, the exposure that makes and the strike's net on the right. Only the money strike is lit.
+ */
+function StrikeTable({ board, scale, unit, lot, loading }: { board: Board | null; scale: number; unit: "contracts" | "lots"; lot: number; loading: boolean }) {
+  const m = unit === "lots" ? lot : 1
+  const oi = (v: number | null) => (v !== null ? compact(v * m) : "-")
+  const chg = (v: number | null) =>
+    v !== null ? <span className={TONE_TEXT[toneOf(v)]}>{signedCompact(v * m)}</span> : "-"
+  return (
+    <Table containerClassName="min-h-0 flex-1 overflow-auto bg-card">
+      <TableHeader className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_var(--border)]">
+        <TableRow className="hover:bg-transparent">
+          <TableHead className={cn(HEAD, "pl-4")}>Strike</TableHead>
+          <TableHead className={cn(HEAD, "text-right")}>Call OI</TableHead>
+          <TableHead className={cn(HEAD, "text-right")}>Put OI</TableHead>
+          <TableHead className={cn(HEAD, "text-right")}>Call OI today</TableHead>
+          <TableHead className={cn(HEAD, "text-right")}>Put OI today</TableHead>
+          <TableHead className={HEAD}>Call delta × OI</TableHead>
+          <TableHead className={HEAD}>Put delta × OI</TableHead>
+          <TableHead className={cn(HEAD, "pr-4 text-right")}>Net</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {!board || loading
+          ? Array.from({ length: 9 }, (_, i) => (
+              <TableRow key={i} className="hover:bg-transparent">
+                {Array.from({ length: 8 }, (_, j) => (
+                  <TableCell key={j} className={CELL}>
+                    <Skeleton className="h-4 w-14" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          : board.rows.map((r) => {
+              const net = r.callDoi !== null && r.putDoi !== null ? r.callDoi + r.putDoi : null
+              return (
+                <TableRow
+                  key={r.strike}
+                  aria-current={r.atm ? "true" : undefined}
+                  className={cn(r.atm && "bg-primary/8 shadow-[inset_2px_0_0_var(--primary)] hover:bg-primary/12")}
+                  title={`Strike ${fmt0(r.strike)}: call delta ${r.callDelta?.toFixed(2) ?? "-"}, put delta ${r.putDelta?.toFixed(2) ?? "-"}`}
+                >
+                  <TableCell className={cn(CELL, "pl-4 num", r.atm ? "font-medium text-primary-ink" : "text-foreground")}>
+                    {fmt0(r.strike)}
+                    {r.atm ? <span className="ml-2 rounded-[4px] bg-primary/15 px-1 text-[10px] font-medium text-primary-ink">ATM</span> : null}
+                  </TableCell>
+                  <TableCell className={cn(CELL, "text-right num text-soft")}>{oi(r.callOi)}</TableCell>
+                  <TableCell className={cn(CELL, "text-right num text-soft")}>{oi(r.putOi)}</TableCell>
+                  <TableCell className={cn(CELL, "text-right num text-xs")}>{chg(r.callChg)}</TableCell>
+                  <TableCell className={cn(CELL, "text-right num text-xs")}>{chg(r.putChg)}</TableCell>
+                  <BarCell value={r.callDoi} scale={scale} tone="up" />
+                  <BarCell value={r.putDoi} scale={scale} tone="down" />
+                  <TableCell className={cn(CELL, "pr-4 text-right num text-xs", net !== null ? TONE_TEXT[toneOf(net)] : "text-subtle")}>
+                    {net !== null ? signedCompact(net) : "-"}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+      </TableBody>
+    </Table>
+  )
+}
+
+type View = "net" | "strikes"
 
 export function DeltaOiBoard({
   underlying,
@@ -269,6 +530,21 @@ export function DeltaOiBoard({
 
   const [band, setBand] = useState<number>(10)
   const [unit, setUnit] = useState<"contracts" | "lots">("contracts")
+  const [view, setViewState] = useState<View>(() => {
+    try {
+      return localStorage.getItem("ah:doi:view") === "strikes" ? "strikes" : "net"
+    } catch {
+      return "net"
+    }
+  })
+  const setView = (v: View) => {
+    setViewState(v)
+    try {
+      localStorage.setItem("ah:doi:view", v)
+    } catch {
+      // Remembered for this visit only.
+    }
+  }
 
   const nearest = nearestStrike(strikes, spot)
   const middle = useMiddle(
@@ -319,6 +595,9 @@ export function DeltaOiBoard({
     board.rows.length > 0 &&
     board.rows.every((r) => r.callOi === null && r.putOi === null)
   const unitWord = unit === "lots" ? "units" : "contracts"
+  // The day's line is kept per market, expiry, band and unit: each is a different total.
+  const samples = useDaySeries(`${underlying}:${expiry}:${band}:${unit}`, board, beat)
+  const history = useDayHistory(underlying, expiry, band, board?.forward ?? null, unit === "lots" ? lot : 1)
 
   if (state.status === "error") {
     return (
@@ -344,6 +623,7 @@ export function DeltaOiBoard({
     // Flat, as the straddle's figures are: a strip of figures, a row of controls, then the table, each
     // parted from the next by one line. Cards inside the container's own frame read as boxes in boxes.
     <div className="flex min-h-0 flex-1 flex-col">
+      {view === "strikes" ? (
       <div className="grid shrink-0 grid-cols-2 divide-x divide-y border-b bg-card @md/chart:grid-cols-3 @3xl/chart:grid-cols-6 @3xl/chart:divide-y-0">
         <Stat
           label="Call delta × OI"
@@ -397,7 +677,18 @@ export function DeltaOiBoard({
         />
       </div>
 
+      ) : null}
+
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2">
+        <Segmented
+          value={view}
+          onChange={setView}
+          label="View"
+          items={[
+            { value: "net", label: "Net (day)" },
+            { value: "strikes", label: "Strike-wise" },
+          ]}
+        />
         <div className="flex items-center gap-2">
           <span className="type-label">Strikes each side</span>
           <Segmented
@@ -432,72 +723,23 @@ export function DeltaOiBoard({
 
       {noOi ? (
         <div className="shrink-0 border-b px-3 py-2 type-meta">
-          No open interest from the feed yet. It appears once the legs tick.
+          Open interest appears once the options start trading.
         </div>
       ) : null}
 
-      <Table containerClassName="min-h-0 flex-1 overflow-auto bg-card">
-        <TableHeader className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_var(--border)]">
-          <TableRow className="hover:bg-transparent">
-            <TableHead className={cn(HEAD, "text-right")}>Call OI</TableHead>
-            <TableHead className={cn(HEAD, "text-right")}>Delta</TableHead>
-            <TableHead className={cn(HEAD, "text-right")}>
-              Call delta × OI
-            </TableHead>
-            <TableHead className={cn(HEAD, "text-center")}>Strike</TableHead>
-            <TableHead className={HEAD}>Put delta × OI</TableHead>
-            <TableHead className={HEAD}>Delta</TableHead>
-            <TableHead className={HEAD}>Put OI</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {!board || state.status === "loading"
-            ? Array.from({ length: 9 }, (_, i) => (
-                <TableRow key={i} className="hover:bg-transparent">
-                  {Array.from({ length: 7 }, (_, j) => (
-                    <TableCell key={j} className={CELL}>
-                      <Skeleton className="h-4 w-16" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            : board.rows.map((r) => (
-                <TableRow key={r.strike} className={cn(r.atm && "bg-accent")}>
-                  <TableCell
-                    className={cn(CELL, "text-right num text-muted-foreground")}
-                  >
-                    {r.callOi !== null
-                      ? compact(r.callOi * (unit === "lots" ? lot : 1))
-                      : "-"}
-                  </TableCell>
-                  <TableCell
-                    className={cn(CELL, "text-right num text-muted-foreground")}
-                  >
-                    {r.callDelta !== null ? r.callDelta.toFixed(2) : "-"}
-                  </TableCell>
-                  <ExposureCell value={r.callDoi} scale={scale} side="call" />
-                  <TableCell
-                    className={cn(
-                      CELL,
-                      "text-center num font-medium shadow-[inset_1px_0_0_var(--border),inset_-1px_0_0_var(--border)]",
-                      r.atm && "text-primary"
-                    )}
-                  >
-                    {fmt0(r.strike)}
-                  </TableCell>
-                  <ExposureCell value={r.putDoi} scale={scale} side="put" />
-                  <TableCell className={cn(CELL, "num text-muted-foreground")}>
-                    {r.putDelta !== null ? r.putDelta.toFixed(2) : "-"}
-                  </TableCell>
-                  <TableCell className={cn(CELL, "num text-muted-foreground")}>
-                    {r.putOi !== null
-                      ? compact(r.putOi * (unit === "lots" ? lot : 1))
-                      : "-"}
-                  </TableCell>
-                </TableRow>
-              ))}
-        </TableBody>
-      </Table>
+      {view === "net" ? (
+        board && state.status !== "loading" ? (
+          <NetDayView board={board} samples={samples} history={history} unitWord={unitWord} />
+        ) : (
+          <div className="flex flex-col gap-4 p-5">
+            <Skeleton className="h-8 w-[60%]" />
+            <Skeleton className="h-2.5 w-full" />
+            <Skeleton className="h-[120px] w-full" />
+          </div>
+        )
+      ) : (
+        <StrikeTable board={board} scale={scale} unit={unit} lot={lot} loading={state.status === "loading"} />
+      )}
     </div>
   )
 }
@@ -525,9 +767,9 @@ export function DeltaOiPanel({
       data-active={active || undefined}
       onPointerDownCapture={onActivate}
       onFocusCapture={onActivate}
-      className="@container/chart flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden panel rounded-tl-none bg-background"
+      className="@container/chart flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden panel bg-card"
     >
-      <div className="panel-head flex h-[38px] shrink-0 items-center gap-x-3 overflow-hidden bg-chart-toolbar px-1.5">
+      <div className="panel-head [--panel-rule:var(--separator-strong)] flex h-[38px] shrink-0 items-center gap-x-3 overflow-hidden bg-chart-toolbar px-1.5">
         <div className="flex shrink-0 items-center gap-x-0.5">{toolbar}</div>
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <FullscreenButton full={full} onToggle={toggle} />

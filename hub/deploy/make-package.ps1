@@ -25,7 +25,7 @@ Copy-Item "$proj\.env.example", "$proj\shoonya_auto_login.py" $out
 Copy-Item "$PSScriptRoot\windows\*" $out
 Copy-Item "$PSScriptRoot\setup-linux.sh" $out
 Copy-Item "$hub\MarketHub-server.exe" "$out\hub\MarketHub-server.exe"
-Copy-Item "$hub\config.toml", "$hub\Cargo.toml", "$hub\Cargo.lock" "$out\hub"
+Copy-Item "$hub\config.toml", "$hub\Cargo.toml", "$hub\Cargo.lock", "$hub\news-feeds.json" "$out\hub"
 Copy-Item "$hub\src" "$out\hub\src" -Recurse
 Copy-Item $PSScriptRoot "$out\hub\deploy" -Recurse
 

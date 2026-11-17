@@ -270,13 +270,13 @@ export function StraddleChart({
         .then(
           (r) =>
             !cancelled &&
-            take(r.bars, "The hub keeps no straddle for that day."),
-          (e: unknown) =>
+            take(r.bars, "No straddle data for that day."),
+          () =>
             !cancelled &&
             setState({
               kind: "empty",
               note:
-                e instanceof Error ? e.message : "Could not load that session.",
+                "That day could not be loaded. Please try again.",
             })
         )
       return () => {
@@ -298,10 +298,10 @@ export function StraddleChart({
           take(
             (msg.bars as StraddleBar[]) ?? [],
             backfill === "loading"
-              ? "The hub is still building today's session."
+              ? "Today's straddle is still loading. Check back in a minute."
               : backfill.startsWith("failed")
-                ? backfill
-                : "No straddle yet for today: the market has not opened or the feed has not started."
+                ? "Today's straddle could not be loaded. Please try again."
+                : "No straddle yet today. It starts once the market opens."
           )
         } else if (msg.t === "straddle") {
           const bar = msg.bar as StraddleBar
@@ -627,7 +627,7 @@ export function StraddleChart({
           ? {
               kind: "message",
               title: "No expiry to show",
-              description: "This underlying lists no upcoming expiry.",
+              description: "This market has no upcoming expiry.",
             }
           : state.kind === "loading"
             ? { kind: "loading" }

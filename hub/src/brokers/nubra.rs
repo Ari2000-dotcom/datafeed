@@ -10,6 +10,7 @@
 //!     accepting it, the app asks for one new OTP.
 //!   * **TOTP (optional):** if a TOTP secret is saved, `/totp/login` with a code
 //!     generated from Nubra's own clock (a drifted PC clock makes valid secrets fail).
+//!     It is the fallback when the saved device login is missing or Nubra refuses it.
 //!
 //! Failed logins are throttled (≥ 60 s apart) and stop after 3 in a row, so a
 //! wrong credential can never lock the account. Saving new credentials in the
@@ -167,10 +168,14 @@ impl Nubra {
     fn refresh_status_idle(&self) {
         let s = if self.phone().is_none() || !self.creds.is_set("NUBRA_MPIN") {
             "enter mobile number and MPIN".to_string()
+        } else if self.has_device_login.load(Ordering::Relaxed) {
+            if self.creds.is_set("NUBRA_TOTP_SECRET") {
+                "ready (saved device login, TOTP as backup)".to_string()
+            } else {
+                "ready (saved device login, MPIN only)".to_string()
+            }
         } else if self.creds.is_set("NUBRA_TOTP_SECRET") {
             "ready (TOTP login)".to_string()
-        } else if self.has_device_login.load(Ordering::Relaxed) {
-            "ready (saved device login, MPIN only)".to_string()
         } else {
             "needs a one-time OTP — press Send OTP".to_string()
         };
@@ -279,6 +284,41 @@ impl Nubra {
 
     // ---------- login ----------
 
+    /// TOTP login: a code from Nubra's own clock, then the MPIN.
+    async fn totp_login(&self, phone: &str, secret: &str) -> Result<(String, String), FetchError> {
+        let device = Self::device_id_for(phone);
+        let bytes = totp_rs::Secret::Encoded(secret.replace(' ', "").to_uppercase())
+            .to_bytes()
+            .map_err(|_| FetchError::Auth("Nubra TOTP secret is not valid (should be letters A–Z and digits 2–7)".into()))?;
+        let totp = totp_rs::TOTP::new_unchecked(totp_rs::Algorithm::SHA1, 6, 1, 30, bytes);
+        // Retry once only when the code was made at the edge of its 30 s window.
+        for attempt in 0..2 {
+            let now = self.server_secs().await;
+            let code: u64 = totp.generate(now).parse().unwrap_or(0);
+            let res = self
+                .call(reqwest::Method::POST, "/totp/login", &device, None, None, Some(json!({"phone": phone, "totp": code, "otp": ""})))
+                .await;
+            let auth = match res {
+                Ok(v) => v["auth_token"].as_str().unwrap_or("").to_string(),
+                Err(e) if attempt == 0 && now % 30 >= 27 => {
+                    tokio::time::sleep(Duration::from_secs(30 - now % 30 + 1)).await;
+                    let _ = e;
+                    continue;
+                }
+                Err(e) => return Err(FetchError::Auth(format!("TOTP login refused ({}) — check the TOTP secret", e.msg))),
+            };
+            if auth.is_empty() {
+                return Err(FetchError::Auth("TOTP login returned no auth token".into()));
+            }
+            return self
+                .finish_with_pin(&device, &auth)
+                .await
+                .map(|t| (t, device.clone()))
+                .map_err(|e| FetchError::Auth(format!("MPIN refused: {}", e.msg)));
+        }
+        Err(FetchError::Auth("TOTP login failed".into()))
+    }
+
     /// One login attempt. Returns (session token, device id).
     async fn login_once(&self) -> Result<(String, String), FetchError> {
         let phone = self.phone().ok_or_else(|| FetchError::Auth("Nubra mobile number not set".into()))?;
@@ -286,38 +326,13 @@ impl Nubra {
             return Err(FetchError::Auth("Nubra MPIN not set".into()));
         }
 
-        if let Some(secret) = self.creds.get("NUBRA_TOTP_SECRET") {
-            let device = Self::device_id_for(&phone);
-            let bytes = totp_rs::Secret::Encoded(secret.replace(' ', "").to_uppercase())
-                .to_bytes()
-                .map_err(|_| FetchError::Auth("Nubra TOTP secret is not valid (should be letters A–Z and digits 2–7)".into()))?;
-            let totp = totp_rs::TOTP::new_unchecked(totp_rs::Algorithm::SHA1, 6, 1, 30, bytes);
-            // Retry once only when the code was made at the edge of its 30 s window.
-            for attempt in 0..2 {
-                let now = self.server_secs().await;
-                let code: u64 = totp.generate(now).parse().unwrap_or(0);
-                let res = self
-                    .call(reqwest::Method::POST, "/totp/login", &device, None, None, Some(json!({"phone": phone, "totp": code, "otp": ""})))
-                    .await;
-                let auth = match res {
-                    Ok(v) => v["auth_token"].as_str().unwrap_or("").to_string(),
-                    Err(e) if attempt == 0 && now % 30 >= 27 => {
-                        tokio::time::sleep(Duration::from_secs(30 - now % 30 + 1)).await;
-                        let _ = e;
-                        continue;
-                    }
-                    Err(e) => return Err(FetchError::Auth(format!("TOTP login refused ({}) — check the TOTP secret", e.msg))),
-                };
-                if auth.is_empty() {
-                    return Err(FetchError::Auth("TOTP login returned no auth token".into()));
-                }
-                return self
-                    .finish_with_pin(&device, &auth)
-                    .await
-                    .map(|t| (t, device.clone()))
-                    .map_err(|e| FetchError::Auth(format!("MPIN refused: {}", e.msg)));
+        // The saved device login (MPIN only) goes first; when it is missing or Nubra
+        // no longer accepts it, fall back to TOTP if a secret is saved.
+        let totp_secret = self.creds.get("NUBRA_TOTP_SECRET");
+        if self.load_device().is_none() {
+            if let Some(secret) = &totp_secret {
+                return self.totp_login(&phone, secret).await;
             }
-            return Err(FetchError::Auth("TOTP login failed".into()));
         }
 
         // Saved device login: MPIN only.
@@ -340,8 +355,12 @@ impl Nubra {
                 Err(FetchError::Auth(format!("MPIN refused ({}) — check the MPIN", e.msg)))
             }
             Err(e) if e.is_auth() => {
-                // Nubra ended the device login: forget it so the app asks for a new OTP.
+                // Nubra ended the device login: forget it, and log in with TOTP when a secret is saved.
                 self.clear_device();
+                if let Some(secret) = &totp_secret {
+                    tracing::warn!(error = %e.msg, "nubra: saved device login refused; logging in with TOTP");
+                    return self.totp_login(&phone, secret).await;
+                }
                 Err(FetchError::Auth(format!("Nubra no longer accepts the saved login ({}) — send a new OTP", e.msg)))
             }
             Err(e) => Err(FetchError::Other(e.msg)),

@@ -42,6 +42,9 @@ const LEGS_PER_QUERY: usize = 8;
 /// Batches of a past day's per-leg OI in flight at once.
 const LEG_QUERIES_IN_FLIGHT: usize = 4;
 
+/// Instants per `multistrike` call for a day's series: a session at five-minute steps is four calls.
+const SERIES_INSTANTS_PER_CALL: usize = 20;
+
 /// How long an answer is shared before Nubra is asked again.
 const KEEP: Duration = Duration::from_secs(60);
 /// How far back a past session can be asked for, in calendar days.
@@ -87,6 +90,59 @@ impl OiProfiles {
             return Ok(v.clone());
         }
         let v = Arc::new(self.fetch(underlying, &expiries, date, band, forward).await?);
+        cache.insert(key, (Instant::now(), v.clone()));
+        Ok(v)
+    }
+
+    /// The latest session's open interest through the day: `band` strikes either side of `forward`,
+    /// every `step` minutes from the open to now (or to the settle once it is over), one figure per
+    /// strike and side. What the Delta × OI board draws its day line from. `multistrike` takes many
+    /// instants in one call, so a whole session costs Nubra a few calls (SERIES_INSTANTS_PER_CALL
+    /// each), shared for a minute by every visitor asking for the same strikes.
+    pub async fn series(&self, underlying: &str, expiry: NaiveDate, band: u32, forward: f64, step: u32) -> Result<Arc<Value>, String> {
+        let canonical = Canonical::parse(underlying)?;
+        let market = match &canonical {
+            Canonical::Underlying { market, .. } => *market,
+            _ => return Err(format!("{underlying}: give an underlying, e.g. nse:nifty")),
+        };
+        let name = canonical.name_upper();
+        let chain = tokio::task::block_in_place(|| self.instruments.chain(market, &name, expiry)).map_err(|e| e.to_string())?;
+        let mut strikes: Vec<f64> = chain.iter().map(|s| s.strike).collect();
+        strikes.sort_by(f64::total_cmp);
+        strikes.dedup();
+        let strikes = banded_strikes(&strikes, Some(band.min(30)), Some(forward));
+        if strikes.is_empty() {
+            return Err(format!("{underlying}: no strikes for {expiry}"));
+        }
+        let step = step.clamp(1, 60);
+        // Keyed by the strikes asked for, not the forward: a forward that drifts inside a strike
+        // reads the same strikes and shares the answer.
+        let key = format!("series|{underlying}|{expiry}|{}..{}|{step}", strikes[0], strikes[strikes.len() - 1]);
+        let mut cache = self.cache.lock().await;
+        cache.retain(|_, (at, _)| at.elapsed() < KEEP);
+        if let Some((_, v)) = cache.get(&key) {
+            return Ok(v.clone());
+        }
+
+        let (day, times) = series_times(market, Utc::now(), step);
+
+        let exchange = exchange_of(market);
+        let expiries = [expiry];
+        let mut at: Vec<BTreeMap<i64, Sides>> = Vec::with_capacity(times.len());
+        for batch in times.chunks(SERIES_INSTANTS_PER_CALL) {
+            let answer = self.nubra.multistrike(&request_body(exchange, &name, &expiries, &strikes, batch)).await?;
+            at.extend(batch.iter().map(|&t| oi_at(&answer, exchange, &name, &expiries, t)));
+        }
+        let side = |m: &BTreeMap<i64, Sides>, strike: f64, put: bool| -> Value {
+            m.get(&paise(strike)).and_then(|s| if put { s.put } else { s.call }).map_or(Value::Null, |v| json!(v))
+        };
+        let v = Arc::new(json!({
+            "day": day.to_string(),
+            "at": times.iter().map(|t| t.timestamp_millis()).collect::<Vec<_>>(),
+            "strikes": strikes,
+            "call": at.iter().map(|m| strikes.iter().map(|&s| side(m, s, false)).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            "put": at.iter().map(|m| strikes.iter().map(|&s| side(m, s, true)).collect::<Vec<_>>()).collect::<Vec<_>>(),
+        }));
         cache.insert(key, (Instant::now(), v.clone()));
         Ok(v)
     }
@@ -300,6 +356,24 @@ fn day_instants(market: Market, day: NaiveDate, now: DateTime<Utc>) -> Result<(D
     let (_, settle) = session(market);
     let at = |d: NaiveDate| ist.from_local_datetime(&d.and_time(settle)).single().expect("IST has no gaps").with_timezone(&Utc);
     Ok((at(day), at(previous_weekday(day))))
+}
+
+/// The latest session's day and the instants a day's series reads: every `step` minutes after the
+/// open, then the read instant itself (now in session, else that session's settle).
+fn series_times(market: Market, now: DateTime<Utc>, step: u32) -> (NaiveDate, Vec<DateTime<Utc>>) {
+    let ist = crate::clock::ist();
+    let (read, _) = instants(market, now);
+    let day = read.with_timezone(&ist).date_naive();
+    let (open, _) = session(market);
+    let start = ist.from_local_datetime(&day.and_time(open)).single().expect("IST has no gaps").with_timezone(&Utc);
+    let mut times = Vec::new();
+    let mut t = start + CDur::minutes(i64::from(step));
+    while t < read {
+        times.push(t);
+        t += CDur::minutes(i64::from(step));
+    }
+    times.push(read);
+    (day, times)
 }
 
 fn rfc3339(t: DateTime<Utc>) -> String {
@@ -524,6 +598,23 @@ mod tests {
 
     /// The per-leg fallback's shape (`charts/timeseries`, probed via `nubra.rs::parse_candles`):
     /// nanosecond `ts`, a quiet leg's last print carried forward, nothing before its first print.
+    #[test]
+    fn a_series_steps_from_the_open_to_now_and_ends_on_the_settle_after_the_bell() {
+        // Thursday 2026-11-05, 10:02 IST: five-minute steps from 09:20, then 10:02 itself.
+        let (day, times) = series_times(Market::Nse, utc("2026-11-05T04:32:30Z"), 5);
+        assert_eq!(day, ymd(2026, 11, 5));
+        assert_eq!(times.first().copied(), Some(utc("2026-11-05T03:50:00Z")), "first step is 09:20 IST");
+        assert_eq!(times.last().copied(), Some(utc("2026-11-05T04:32:00Z")), "last is the current whole minute");
+        assert_eq!(times.len(), 10, "09:20 … 10:00 is nine steps, then now");
+        // After the bell, the series runs to the 15:40 settle.
+        let (_, times) = series_times(Market::Nse, utc("2026-11-05T18:00:00Z"), 5);
+        assert_eq!(times.last().copied(), Some(utc("2026-11-05T10:10:00Z")), "15:40 IST settle");
+        assert!(times.windows(2).all(|w| w[0] < w[1]), "in time order");
+        // A Saturday reads Friday's session.
+        let (day, _) = series_times(Market::Nse, utc("2026-11-07T06:00:00Z"), 15);
+        assert_eq!(day, ymd(2026, 11, 6));
+    }
+
     #[test]
     fn last_oi_at_or_before_carries_a_quiet_legs_last_print() {
         let ns = |ms: i64| ms * 1_000_000;

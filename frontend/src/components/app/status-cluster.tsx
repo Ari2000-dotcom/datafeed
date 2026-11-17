@@ -28,7 +28,7 @@ export function FeedStatus({ className }: { className?: string }) {
 
   if (status === "open")
     return (
-      <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", className)} role="status">
+      <span className={cn("inline-flex items-center gap-1.5 text-xs", className)} role="status">
         <span className="size-1.5 rounded-full bg-up" aria-hidden />
         <span>Live</span>
       </span>
@@ -39,9 +39,9 @@ export function FeedStatus({ className }: { className?: string }) {
     <button
       type="button"
       onClick={hub.retryNow}
-      title={dropped ? "The connection to the feed dropped. Click to try again now." : "Connecting to the feed"}
+      title={dropped ? "Live prices paused. Click to reconnect now." : "Connecting to live prices"}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-ring",
+        "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors outline-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-ring",
         dropped ? "text-down" : "text-muted-foreground",
         className
       )}
@@ -69,7 +69,7 @@ export function FeedNotice() {
   if (since === null || now - since < 5_000) return null
 
   return (
-    <div role="alert" className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 border-b border-down/30 bg-down/10 px-6 py-1.5 text-[13px]">
+    <div role="alert" className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 border-b border-down/30 bg-down/10 px-4 py-1.5 text-[13px]">
       <span className="text-foreground">Live prices are paused.</span>
       <span className="text-muted-foreground">The figures on screen are the last ones received.</span>
       <span className="ml-auto num text-xs text-muted-foreground">{retryIn ? `Trying again in ${retryIn}s` : "Trying again"}</span>
@@ -91,7 +91,7 @@ export function StatusCluster() {
       {sessions(now).map((s) => (
         <span key={s.exchange} className="flex items-center gap-1.5 whitespace-nowrap">
           <span className="text-subtle">{s.exchange}</span>
-          <span className={cn("font-medium", SESSION_TEXT[s.state])}>{SESSION_LABEL[s.state]}</span>
+          <span className={cn(SESSION_TEXT[s.state])}>{SESSION_LABEL[s.state]}</span>
         </span>
       ))}
       <FeedStatus />

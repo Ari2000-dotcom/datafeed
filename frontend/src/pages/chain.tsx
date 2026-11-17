@@ -79,7 +79,7 @@ function useMaxOi(ids: string[]): number {
 
 const strikeFmt = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 })
 
-const HEAD = "h-9 px-3 type-label"
+const HEAD = "h-8 px-3 type-colhead"
 const CELL = "h-9 px-3 py-0"
 
 /** One leg's three cells. Open interest carries a bar growing away from the strike, in neutral ink. */
@@ -173,7 +173,7 @@ const ChainRow = memo(function ChainRow({
   maxOi: number
 }) {
   return (
-    <TableRow data-atm={atm || undefined} className={cn(atm && "bg-accent")}>
+    <TableRow data-atm={atm || undefined} className={cn(atm && "bg-primary/10")}>
       <LegCells
         id={row.call}
         side="call"
@@ -328,7 +328,7 @@ export function ChainPage({
 
       <div className="flex min-h-0 flex-1 flex-col bg-background p-4">
         {state.status === "error" ? (
-          <Empty className="rounded-lg border">
+          <Empty className="panel bg-card">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <AlertIcon />
@@ -347,21 +347,21 @@ export function ChainPage({
           // The table scrolls inside its card and its column names stay pinned on top: the page opens on the
           // strikes round the money, and without them a row of figures could not be read.
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden panel bg-card">
-            <Table containerClassName="min-h-0 flex-1 overflow-auto bg-card">
-              <TableHeader className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_var(--border)]">
+            <Table containerClassName="min-h-0 flex-1 overflow-auto bg-card" className="border-separate border-spacing-0 [&_tbody_td]:border-b">
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_var(--border)] [&_th]:bg-card">
                 <TableRow className="border-b-0 hover:bg-transparent">
                   <TableHead
                     colSpan={3}
-                    className="h-9 border-r px-3 text-center text-[13px] font-medium text-foreground"
+                    className="h-9 border-r px-3 text-center text-[13px] text-foreground"
                   >
                     Calls
                   </TableHead>
-                  <TableHead className="h-9 px-3 text-center type-meta">
+                  <TableHead className="h-8 px-3 text-center type-colhead">
                     {expiry ? expiryLabel(expiry) : ""}
                   </TableHead>
                   <TableHead
                     colSpan={3}
-                    className="h-9 border-l px-3 text-center text-[13px] font-medium text-foreground"
+                    className="h-9 border-l px-3 text-center text-[13px] text-foreground"
                   >
                     Puts
                   </TableHead>

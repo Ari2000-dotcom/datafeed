@@ -31,11 +31,18 @@ export function App() {
 
   return (
     <TooltipProvider delayDuration={350}>
+      <a
+        href="#main"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:rounded-md focus-visible:bg-primary focus-visible:px-3 focus-visible:py-1.5 focus-visible:text-primary-foreground"
+      >
+        Skip to content
+      </a>
       <div className="flex h-dvh flex-col">
         <TopNav onSearch={() => setSearching(true)} stripHidden={!strip} onShowStrip={() => showStrip(true)} />
         {strip ? <IndexStrip onHide={() => showStrip(false)} /> : null}
         <FeedNotice />
-        <main className="min-h-0 flex-1">
+        {/* The content window: inset on the backdrop, 12px corners, a hairline ring, as the reference sets its pages. */}
+        <main id="main" tabIndex={-1} className="outline-none mx-1.5 mb-1.5 min-h-0 flex-1 overflow-hidden rounded-[12px] bg-background shadow-window">
           {route.name === "chain" ? <ChainPage route={route} /> : route.name === "charts" ? <ChartsPage route={route} /> : <MarketsPage />}
         </main>
       </div>

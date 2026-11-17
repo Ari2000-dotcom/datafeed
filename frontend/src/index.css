@@ -42,7 +42,9 @@
 @theme inline {
     /* One family. `.num` turns on Inter's tabular figures. */
     --font-sans: "Inter Hinted", "Segoe UI", system-ui, sans-serif;
+    /* Titles use the same family; only size and weight set them apart. */
     --font-heading: var(--font-sans);
+    --font-display: var(--font-heading);
 
     /* A dense scale: broker screens set data at 12 and 13 px and keep every title modest. */
     --text-xs: 12px;
@@ -94,125 +96,151 @@
     --color-chart: var(--chart);
     /* A move up or down. Used for moves and nothing else. */
     --color-up: var(--up);
+    --color-backdrop: var(--backdrop);
+    --color-primary-ink: var(--primary-ink);
+    --color-separator: var(--separator);
+    --color-separator-strong: var(--separator-strong);
+    --color-zebra: var(--zebra);
+    --color-selection: var(--selection);
+    --shadow-card: var(--shadow-card);
+    --shadow-float: var(--shadow-float);
+    --shadow-control: var(--shadow-control);
+    --shadow-window: var(--shadow-window);
     --color-down: var(--down);
 
-    /* Whole pixels, so a corner is as crisp as a line. */
-    --radius-sm: 4px;
+    /* macOS radius scale: fields 5, buttons and segments 6, menus 8, group boxes 10, sheets 12. */
+    --radius-sm: 5px;
     --radius-md: 6px;
     --radius-lg: 8px;
-    --radius-xl: 12px;
+    --radius-xl: 10px;
     --radius-2xl: 16px;
 }
 
 /*
- * Dark is QuantDesk's palette, which is Zerodha Kite's: neutral gray-black with no tint anywhere, the
- * chart canvas included. A lighter grey workspace (#272727) frames every plate; the plates and the
- * chart canvas are the deeper #181818; the chrome (nav bar, strip, toolbars) is #242424. Text steps
- * down in four bands, each above 4.5:1. The nav bar, strip and chart toolbars share a warm black
- * (#1c1b19: a mix of grey and black, easy on the eyes, never #000) over a brighter warm-grey chart canvas
- * (#2a2927). The earlier TradingView navy (#151924) read violet and was dropped; the candles are brighter too.
- * Borders are opaque: a translucent 1px line lands on a different colour over each surface.
+ * Colour: a cool graphite family in dark and cool paper in light, one orange accent, and green
+ * and red kept for moves only. The page is an inset "window" on a darker backdrop; containers are
+ * hairline-edged plates with a whisper of shadow.
  */
-/* Light is the same structure, flipped. Declared first so .dark, equal in specificity, wins on <html>. */
 :root {
-    --background: oklch(0.972 0.003 255);
-    --foreground: oklch(0.2 0.012 255);
-    --card: oklch(0.995 0.001 255);
-    --card-foreground: oklch(0.2 0.012 255);
-    --popover: oklch(0.995 0.001 255);
-    --popover-foreground: oklch(0.2 0.012 255);
-    --primary: #3d40c4;
-    --primary-foreground: #ffffff;
-    --secondary: oklch(0.945 0.004 255);
-    --secondary-foreground: oklch(0.2 0.012 255);
-    --muted: oklch(0.95 0.004 255);
-    --muted-foreground: oklch(0.45 0.013 255);
-    --subtle: oklch(0.55 0.012 255);
-    --soft: oklch(0.3 0.012 255);
-    --accent: oklch(0.93 0.005 255);
-    --accent-foreground: oklch(0.2 0.012 255);
-    --destructive: oklch(0.55 0.2 25);
-    --border: oklch(0.9 0.005 255);
-    --input: oklch(0.85 0.007 255);
-    --ring: oklch(0.52 0.17 255);
-    --chrome: oklch(0.99 0.002 255);
-    --seg-track: #c9d0d8;
-    --seg-pill: #2b3139;
-    --seg-text: #262c33;
-    --seg-hover: #15191e;
-    --seg-active: #f5f7fa;
+    /* Light: cool paper and blue-black ink. The same cool family as the dark theme, so the two read as one app. */
+    --backdrop: #e9ebef;
+    --background: #f5f6f8;
+    --foreground: #12141a;
+    --card: #ffffff;
+    --card-foreground: #12141a;
+    --popover: #ffffff;
+    --popover-foreground: #12141a;
+    --primary: #ee6a2c;
+    --primary-foreground: #14161a;
+    --primary-ink: #b2400f;
+    --secondary: #eceef2;
+    --secondary-foreground: #12141a;
+    --muted: #eceef2;
+    --muted-foreground: #535a68;
+    --subtle: #666d7c;
+    --soft: #2c3039;
+    --accent: #e6e9ee;
+    --accent-foreground: #12141a;
+    --destructive: #b8303c;
+    --border: rgb(20 26 44 / 10%);
+    --input: #d3d7df;
+    --ring: #ee6a2c;
+    --separator: rgb(20 26 44 / 10%);
+    --separator-strong: rgb(20 26 44 / 18%);
+    --zebra: rgb(60 72 110 / 4%);
+    --selection: rgb(20 26 44 / 7%);
+    --chrome: #eef0f3;
+    --seg-track: rgb(20 26 44 / 6%);
+    --seg-pill: #ffffff;
+    --seg-text: #535a68;
+    --seg-hover: #12141a;
+    --seg-active: #12141a;
     --chart-toolbar: #ffffff;
     --chart: #ffffff;
-    --chart-grid: #f0f3fa;
-    --chart-text: #131722;
-    --chart-muted: #6a6d78;
-    --chart-legend: #6a6d78;
-    --chart-legend-title: #4a4d57;
-    --chart-axis: #6a6d78;
-    --chart-border: #e0e3eb;
-    --chart-surface: #e0e3eb;
-    --chart-up: #089981;
-    --chart-down: #f23645;
-    --chart-accent: #2962ff;
-    --chart-oi-call: #2e8b57;
-    --chart-oi-put: #c0505a;
-    --up: oklch(0.5 0.15 155);
-    --down: oklch(0.55 0.2 25);
-    --radius: 0.375rem;
+    --chart-grid: #e8ebf0;
+    --chart-text: #12141a;
+    --chart-muted: #535a68;
+    --chart-legend: #535a68;
+    --chart-legend-title: #2c3039;
+    --chart-axis: #535a68;
+    --chart-border: #d9dde5;
+    --chart-surface: #e6e9ee;
+    --chart-up: #0a8f77;
+    --chart-down: #e0313f;
+    --chart-accent: #ee6a2c;
+    --chart-oi-call: #1f7a54;
+    --chart-oi-put: #b8303c;
+    --up: #12795a;
+    --down: #bf2f3b;
+    --shadow-card: 0 0.5px 1px rgb(16 22 40 / 7%);
+    --shadow-float: 0 0 0 0.5px rgb(16 22 40 / 10%), 0 10px 30px rgb(16 22 40 / 14%), 0 2px 6px rgb(16 22 40 / 6%);
+    --shadow-control: 0 0 0 0.5px rgb(16 22 40 / 14%), 0 0.5px 1.5px rgb(16 22 40 / 14%);
+    --shadow-window: 0 0 0 0.5px rgb(20 26 44 / 16%), 0 1px 3px rgb(16 22 40 / 5%);
+    --focus-ring: 0 0 0 3px rgb(238 106 44 / 45%);
+    --radius: 0.625rem;
 }
 
 .dark {
-    /* QuantDesk's ladder, measured off its desk: a lighter grey workspace (#272727) the #181818
-       plates lift off, so a container reads as an object sitting on the canvas. */
-    --background: #272727;
-    --foreground: #f3f1ed;
-    --card: #181818;
-    --card-foreground: #f3f1ed;
-    --popover: #2c2b29;
-    --popover-foreground: #f3f1ed;
-    /* AlphaHedge's indigo, the logo's #2D2E8E lifted to read on a dark plate; the same hue as the active frame. */
-    --primary: #6366f1;
-    --primary-foreground: #ffffff;
-    --secondary: #302f2c;
-    --secondary-foreground: #f3f1ed;
-    --muted: #2f2e2b;
-    /* Three clear steps of ink: values #f3f1ed, labels #a9a59f, notes #86837d (4.6:1 on a panel). */
-    --muted-foreground: #a9a59f;
-    --subtle: #86837d;
-    --soft: #d6d3cd;
-    --accent: #383633;
-    --accent-foreground: #f3f1ed;
-    --destructive: #f2615d;
-    --border: #333333;
-    --input: #464646;
-    --ring: #6366f1;
-    --chrome: #1c1b19;
-    --seg-track: rgb(128 124 118 / 24%);
-    --seg-pill: #666360;
-    --seg-text: #a3a09b;
-    --seg-hover: #e8e6e1;
-    --seg-active: #f5f3ef;
-    /* A soft neutral black for the canvas, QuantDesk's #181818 a step lighter so it is never harsh, under a deeper black toolbar. */
-    --chart-toolbar: #181818;
-    --chart: #1b1b1b;
-    --chart-grid: #262626;
-    --chart-text: #e8e8e8;
-    --chart-muted: #b4b4b6;
-    /* The status line's names and labels (title, O H L C): a soft grey a step under the axis text, never bright. */
-    --chart-legend: #9b9ba0;
-    /* The chart's name in its status line, a touch lighter than the labels after it. */
-    --chart-legend-title: #b8b8bc;
-    --chart-axis: #c2c2c4;
-    --chart-border: #303030;
-    --chart-surface: #3d3d3f;
-    --chart-up: #0ecb81;
-    --chart-down: #f6465d;
-    --chart-accent: #4c8dff;
-    /* QuantDesk's open-interest bars: soft green and red, not the candles' */
-    --chart-oi-call: #22c55e;
-    --chart-oi-put: #ef4444;
-    --up: #0ecb81;
-    --down: #f6465d;
+    /*
+     * Dark, eased for long sessions: a dim neutral graphite, not black and not blue. Surfaces climb in lightness only:
+     * backdrop #181818, window #1f1f1f, plate #272727, raised #303030, control #3a3a3a.
+     * Ink is a soft off-white (#dedede), so text never glares against the ground. One orange
+     * accent; green and red are for moves only, softened to sit on slate without vibrating.
+     */
+    --backdrop: #181818;
+    --background: #1f1f1f;
+    --foreground: #dedede;
+    --card: #272727;
+    --card-foreground: #dedede;
+    --popover: #2d2d2d;
+    --popover-foreground: #dedede;
+    --primary: #ee7a3d;
+    --primary-foreground: #1a0f08;
+    --primary-ink: #f5a77a;
+    --secondary: #303030;
+    --secondary-foreground: #dedede;
+    --muted: #303030;
+    --muted-foreground: #a9a9a9;
+    --subtle: #9b9b9b;
+    --soft: #c6c6c6;
+    --accent: #303030;
+    --accent-foreground: #dedede;
+    --destructive: #f28d95;
+    --border: rgb(255 255 255 / 10%);
+    --input: #404040;
+    --ring: #ee7a3d;
+    --separator: rgb(255 255 255 / 10%);
+    --separator-strong: rgb(255 255 255 / 16%);
+    --zebra: rgb(255 255 255 / 3%);
+    --selection: rgb(255 255 255 / 11%);
+    --chrome: #1a1a1a;
+    --seg-track: rgb(255 255 255 / 7%);
+    --seg-pill: #3a3a3a;
+    --seg-text: #a9a9a9;
+    --seg-hover: #dedede;
+    --seg-active: #dedede;
+    --chart-toolbar: #272727;
+    --chart: #1c1c1c;
+    --chart-grid: #2b2b2b;
+    --chart-text: #dedede;
+    --chart-muted: #b4b4b4;
+    --chart-legend: #a9a9a9;
+    --chart-legend-title: #d0d0d0;
+    --chart-axis: #bcbcbc;
+    --chart-border: #363636;
+    --chart-surface: #3a3a3a;
+    --chart-up: #2bb883;
+    --chart-down: #ec5f6c;
+    --chart-accent: #ee7a3d;
+    --chart-oi-call: #78cfa7;
+    --chart-oi-put: #f28d95;
+    --up: #4cc794;
+    --down: #f0808a;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 28%);
+    --shadow-float: inset 0 0.5px 0 rgb(255 255 255 / 8%), 0 0 0 0.5px rgb(0 0 0 / 55%), 0 10px 30px rgb(0 0 0 / 45%);
+    --shadow-control: inset 0 0.5px 0 rgb(255 255 255 / 9%), 0 0 0 0.5px rgb(0 0 0 / 45%), 0 1px 1.5px rgb(0 0 0 / 30%);
+    --shadow-window: 0 0 0 0.5px rgb(255 255 255 / 8%), 0 1px 3px rgb(0 0 0 / 35%);
+    --focus-ring: 0 0 0 3px rgb(238 122 61 / 45%);
 }
 
 @layer base {
@@ -238,8 +266,31 @@
     html.light {
         color-scheme: light;
     }
+    /* Vercel's interface rules: no double-tap zoom delay, no grey tap flash, and no page rubber-band under a mouse. */
+    a,
+    button,
+    [role="button"],
+    [role="tab"],
+    input,
+    select {
+        touch-action: manipulation;
+    }
+    html {
+        -webkit-tap-highlight-color: transparent;
+    }
+    @media (pointer: fine) {
+        html {
+            overscroll-behavior: none;
+        }
+    }
+    [role="dialog"],
+    [role="listbox"],
+    [role="menu"] {
+        overscroll-behavior: contain;
+    }
     body {
-        @apply bg-background text-foreground;
+        @apply text-foreground;
+        background-color: var(--backdrop);
         font-size: 13px;
         line-height: 20px;
         font-weight: 400;
@@ -248,9 +299,22 @@
     }
     h1,
     h2,
-    h3 {
-        font-weight: 600;
-        letter-spacing: -0.011em;
+    h3,
+    [data-card-title] {
+        font-family: var(--font-heading);
+        font-weight: 500;
+        letter-spacing: -0.006em;
+    }
+    *:focus-visible {
+        outline: none;
+        box-shadow: var(--focus-ring);
+        transition: box-shadow 120ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    /* A text field shows where you type with its caret; the orange ring around it read as a stray box. */
+    input:focus-visible,
+    textarea:focus-visible,
+    [contenteditable="true"]:focus-visible {
+        box-shadow: none;
     }
     button:not(:disabled),
     [role="button"]:not([aria-disabled="true"]),
@@ -259,11 +323,13 @@
         cursor: pointer;
     }
     ::selection {
-        background: color-mix(in oklch, var(--primary) 35%, transparent);
+        background: color-mix(in oklch, var(--primary) 28%, transparent);
+        color: var(--foreground);
     }
+    /* Thin overlay-style scrollbar thumbs. */
     * {
         scrollbar-width: thin;
-        scrollbar-color: var(--input) transparent;
+        scrollbar-color: color-mix(in oklch, var(--foreground) 18%, transparent) transparent;
     }
 }
 
@@ -288,10 +354,10 @@
  *   meta     12  regular, third ink: units, notes, dates, counts
  */
 @utility type-display {
-    font-size: 22px;
-    line-height: 28px;
+    font-size: 26px;
+    line-height: 32px;
     font-weight: 500;
-    letter-spacing: -0.012em;
+    letter-spacing: -0.015em;
     font-variant-numeric: tabular-nums;
 }
 @utility type-title {
@@ -324,6 +390,29 @@
     font-weight: 400;
     color: var(--muted-foreground);
 }
+/* A table's column names, as the reference's Activity Monitor tables set them: 11px semibold, second ink. */
+@utility type-colhead {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--muted-foreground);
+}
+/* A section's name: small, second ink, with tracking, beside the orange square (Aperiodic's labels). */
+@utility type-eyebrow {
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+}
+/* The flat plate a section's content sits on: one step lighter than the page, no frame, square-ish corners. */
+@utility plate {
+    border-radius: 6px;
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--separator);
+}
 @utility type-meta {
     font-size: 12px;
     line-height: 16px;
@@ -349,44 +438,40 @@
 }
 
 /*
- * Containers, as QuantDesk sets them: a dark plate on the lighter workspace, one hairline edge, 8px
- * corners, a faint highlight along the top and a short, soft lift under it. No blur on the plate.
+ * Containers, as the reference draws its group boxes: a 10px card one step lighter than the window,
+ * a hairline edge and a whisper of shadow. The active container takes an orange frame, drawn as an
+ * overlay so its content never moves a pixel when focus changes.
  */
 .dark {
-    /* QuantDesk dark: no edge on a container at rest, its indigo frame (75%) on the active one. */
-    --panel-edge: transparent;
-    --panel-active: rgb(99 102 241 / 75%);
-    --panel-rule: rgb(255 255 255 / 14.5%);
-    --tab-ink: #a1a1a6;
-    --tab-ink-active: #e8e8ed;
-    --menu-ground: rgb(40 40 40 / 86%);
-    --menu-hover: rgb(243 241 237 / 9%);
-    --menu-sep: rgb(243 241 237 / 9%);
+    --panel-edge: var(--separator);
+    --panel-active: rgb(238 122 61 / 65%);
+    --panel-rule: var(--separator);
+    --tab-ink: #a9a9a9;
+    --tab-ink-active: #dedede;
+    --menu-ground: rgb(45 45 45 / 92%);
+    --menu-hover: rgb(255 255 255 / 10%);
+    --menu-sep: rgb(255 255 255 / 10%);
 }
 :root:not(.dark) {
-    --panel-edge: oklch(0.9 0.005 255);
-    --tab-ink: oklch(0.45 0.013 255);
-    --tab-ink-active: oklch(0.2 0.012 255);
-    --panel-rule: oklch(0.9 0.005 255);
-    --panel-active: oklch(0.52 0.17 255 / 70%);
-    --menu-ground: rgb(255 255 255 / 88%);
-    --menu-hover: rgb(20 24 30 / 6%);
-    --menu-sep: rgb(20 24 30 / 8%);
+    --panel-edge: var(--separator);
+    --tab-ink: #535a68;
+    --tab-ink-active: #12141a;
+    --panel-rule: var(--separator);
+    --panel-active: rgb(238 106 44 / 60%);
+    --menu-ground: rgb(255 255 255 / 92%);
+    --menu-hover: rgb(20 26 44 / 6%);
+    --menu-sep: rgb(20 26 44 / 8%);
 }
 
-/*
- * A container, as QuantDesk's desk draws one: a #181818 plate on the #272727 workspace, 6px corners,
- * no edge and no shadow at rest (the lighter canvas is what lifts it). The active container takes a
- * 1px indigo frame, drawn as an overlay so its content never moves a pixel when focus changes.
- */
 @utility panel {
     position: relative;
-    border-radius: 6px;
+    border-radius: 10px;
     border: 1px solid var(--panel-edge);
+    box-shadow: var(--shadow-card);
     &::after {
         content: "";
         position: absolute;
-        inset: 0;
+        inset: -1px;
         border-radius: inherit;
         pointer-events: none;
         z-index: 5;
@@ -399,61 +484,70 @@
 }
 
 /*
- * QuantDesk's folder tab: the container's name on a tab that alone carries the plate's ground and runs
- * into it with no line between. 26px, 12px regular, 6px top corners. The strip sits a pixel over the
- * plate, so on the active container the tab's fill covers the frame's top edge under it and the frame
- * wraps tab and plate as one outline.
+ * A container's heading as QuantDesk draws it: a real tab on the card's top edge, the same plate
+ * colour as the card so the two read as one piece. The card's top-left corner is square under it.
  */
 @utility folder-strip {
     position: relative;
-    z-index: 10;
     display: flex;
-    align-items: flex-end;
-    min-height: 26px;
-    margin-bottom: -1px;
+    align-items: center;
+    min-height: 28px;
+    margin-bottom: 0;
     flex-shrink: 0;
+}
+.folder-strip + .panel {
+    border-top-left-radius: 0;
 }
 @utility folder-tab {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 6px;
-    height: 26px;
-    padding: 0 10px 1px;
-    border-radius: 6px 6px 0 0;
+    gap: 8px;
+    height: 28px;
+    padding: 0 12px;
     background: var(--card);
+    border: 1px solid var(--panel-edge);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    margin-bottom: -1px;
+    z-index: 6;
     color: var(--tab-ink);
-    font-size: 12px;
-    line-height: 16px;
+    font-family: var(--font-heading);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+    letter-spacing: -0.006em;
     white-space: nowrap;
-    &::after {
-        content: "";
-        position: absolute;
-        inset: 0 0 1px 0;
-        border: 1px solid transparent;
-        border-bottom: 0;
-        border-radius: inherit;
-        pointer-events: none;
-        transition: border-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+    & .num {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 400;
     }
     &[data-active] {
         color: var(--tab-ink-active);
-    }
-    &[data-active]::after {
         border-color: var(--panel-active);
-        bottom: 0;
+    }
+    &[data-active]::before {
+        content: "";
+        align-self: center;
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--primary);
     }
 }
 
-/* Where a container's header ends: a brighter rule and a hard three-row cast onto the content under it. */
+/* Where a container's header ends: one hairline, as the reference separates a toolbar from content. */
 @utility panel-head {
     position: relative;
     z-index: 1;
     border-bottom: 1px solid var(--panel-rule);
-    box-shadow:
-        0 1px 0 rgb(0 0 0 / 34%),
-        0 2px 0 rgb(0 0 0 / 18%),
-        0 3px 0 rgb(0 0 0 / 7%);
+}
+
+/* Activity Monitor zebra rows. Zero specificity, so any row shading a page sets still wins. */
+:where(.zebra-rows > tr:nth-child(even)) {
+    background-color: var(--zebra);
 }
 
 /*
@@ -467,13 +561,10 @@
     backdrop-filter: blur(24px) saturate(165%);
     border-radius: 10px;
     box-shadow:
-        0 0 0 1px rgb(0 0 0 / 50%),
-        inset 0 0 0 1px rgb(255 255 255 / 7%),
-        0 16px 40px rgb(0 0 0 / 42%),
-        0 3px 10px rgb(0 0 0 / 22%);
+        var(--shadow-float);
     transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin, var(--radix-select-content-transform-origin, top)));
     &[data-state="open"] {
-        animation: menu-in 180ms cubic-bezier(0.34, 1.3, 0.64, 1) backwards;
+        animation: menu-in 180ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
     }
     &[data-state="closed"] {
         animation: menu-out 110ms cubic-bezier(0.4, 0, 1, 1) forwards;

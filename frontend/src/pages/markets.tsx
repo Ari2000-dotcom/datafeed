@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import { AlertIcon, ChevronDownIcon, SearchIcon } from "@/components/icons"
 import { Segmented } from "@/components/app/toolbar"
-import { Folder, FolderTab } from "@/components/app/folder"
+import { Section } from "@/components/app/section"
 
 import {
   INDIA_ITEMS,
@@ -9,8 +9,8 @@ import {
   commodityItems,
 } from "@/components/app/market-summary"
 import { WorldMarkets } from "@/components/app/world-markets"
+import { MarketNews } from "@/components/app/market-news"
 import { Move, TONE_TEXT } from "@/components/app/move"
-import { PageHeader } from "@/components/app/page-header"
 import { RangeBar } from "@/components/app/range-bar"
 import {
   Empty,
@@ -62,7 +62,7 @@ import { cn } from "@/lib/utils"
 
 type Filter = "all" | "nse" | "bse" | "mcx"
 
-const HEAD = "h-9 px-3 type-label"
+const HEAD = "h-8 px-3 type-colhead"
 const NUM_HEAD = cn(HEAD, "text-right")
 const CELL = "h-10 px-3 py-0"
 
@@ -129,7 +129,7 @@ function MarketRow({
             onClick={(e) => e.stopPropagation()}
             className={cn(
               "outline-none hover:underline focus-visible:underline",
-              follower ? "text-soft" : "font-medium"
+              follower ? "text-soft" : "text-foreground"
             )}
           >
             {instrumentName(u.id, u.name)}
@@ -181,7 +181,7 @@ function MarketRow({
             low={day.low}
             high={day.high}
             value={quote?.ltp}
-            className="w-20 shrink-0"
+            className="w-20 min-w-20 flex-1 xl:max-w-56"
           />
           <span className="w-[9ch] num text-xs text-muted-foreground">
             {day.high !== null ? fmt2(day.high) : ""}
@@ -227,7 +227,7 @@ function GroupRow({
   onToggle: () => void
 }) {
   return (
-    <TableRow className="bg-chrome hover:bg-chrome">
+    <TableRow className="bg-background/40 hover:bg-background/40">
       <TableCell colSpan={8} className="h-9 p-0">
         <button
           type="button"
@@ -242,7 +242,7 @@ function GroupRow({
               open ? "" : "-rotate-90"
             )}
           />
-          <span className="text-[13px] font-medium">{group.title}</span>
+          <span data-card-title className="type-eyebrow text-foreground">{group.title}</span>
           <span className="num type-meta">{ids.length}</span>
           <span className="hidden type-meta sm:inline">{group.note}</span>
           <span className="ml-auto">
@@ -338,23 +338,16 @@ export function MarketsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader
-        title="Markets"
-        note="Prices in INR. Every change is against the previous close."
-      />
-
+      <h1 className="sr-only">Markets</h1>
       <div className="min-h-0 flex-1 overflow-y-auto bg-background">
-        <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-1.5 pt-2 pb-8">
+        <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-3 pt-4 pb-10 sm:gap-10 sm:px-5 sm:pt-6 sm:pb-12">
           {/* Indices, commodities and the world side by side on a wide screen; two columns with the world under them on a laptop; one on a phone. Each is a QuantDesk container: a folder tab over its plate. */}
-          <div className="grid gap-3 lg:grid-cols-2 lg:gap-1.5 xl:grid-cols-3">
-            <Folder
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            <Section
               title="Indian indices"
               count={INDIA_ITEMS.length}
               aside={
-                <>
-                  <span className="hidden type-meta md:inline">Spot</span>
-                  <Breadth ids={INDIA_ITEMS.map((i) => i.id)} tones={tones} />
-                </>
+<Breadth ids={INDIA_ITEMS.map((i) => i.id)} tones={tones} />
               }
             >
               <OverviewPanel
@@ -363,16 +356,13 @@ export function MarketsPage() {
                 items={INDIA_ITEMS}
                 onTone={onTone}
               />
-            </Folder>
+            </Section>
 
-            <Folder
+            <Section
               title="MCX commodities"
               count={loading ? "" : commodities.length}
               aside={
-                <>
-                  <span className="hidden type-meta md:inline">Nearest future</span>
-                  <Breadth ids={commodities.map((u) => u.id)} tones={tones} />
-                </>
+<Breadth ids={commodities.map((u) => u.id)} tones={tones} />
               }
             >
               <OverviewPanel
@@ -382,21 +372,21 @@ export function MarketsPage() {
                 loading={loading}
                 onTone={onTone}
               />
-            </Folder>
+            </Section>
 
-            <Folder
+            <Section
               title="Global markets"
               count={8}
               className="lg:col-span-2 xl:col-span-1"
-              aside={<span className="hidden type-meta md:inline">Via Upstox, hours in IST</span>}
+              aside={<span className="hidden type-meta md:inline">Times in IST</span>}
             >
               <WorldMarkets />
-            </Folder>
+            </Section>
           </div>
 
-          <section aria-label="Option instruments" className="flex flex-col">
-            <FolderTab
-              title="Option instruments"
+          <MarketNews />
+
+          <Section title="Options markets" flush
               count={
                 loading
                   ? ""
@@ -406,7 +396,7 @@ export function MarketsPage() {
               }
               aside={
                 <>
-                  <span className="hidden type-meta lg:inline">Every underlying with an option chain</span>
+                  <span className="hidden type-meta lg:inline">Click a market to open its chart</span>
                   <Segmented
                     value={filter}
                     onChange={setFilter}
@@ -418,58 +408,58 @@ export function MarketsPage() {
                       { value: "mcx", label: "MCX" },
                     ]}
                   />
-                  <InputGroup className="h-7 w-40 sm:w-48">
+                  <InputGroup className="h-8 min-w-0 flex-1 sm:w-56 sm:flex-none">
                     <InputGroupAddon>
                       <SearchIcon />
                     </InputGroupAddon>
                     <InputGroupInput
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Filter"
-                      aria-label="Filter instruments"
+                      placeholder="Search markets"
+                      aria-label="Search markets"
                     />
                   </InputGroup>
                 </>
               }
-            />
+          >
             {error ? (
-              <Empty className="panel rounded-tl-none bg-card">
+              <Empty className="plate">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <AlertIcon />
                   </EmptyMedia>
-                  <EmptyTitle>Could not load instruments</EmptyTitle>
-                  <EmptyDescription>{error}</EmptyDescription>
+                  <EmptyTitle>Markets are not available right now</EmptyTitle>
+                  <EmptyDescription>Prices will appear here as soon as the connection is back. Try refreshing in a moment.</EmptyDescription>
                 </EmptyHeader>
               </Empty>
             ) : !loading && rows.length === 0 ? (
-              <Empty className="panel rounded-tl-none bg-card">
+              <Empty className="plate">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <SearchIcon />
                   </EmptyMedia>
-                  <EmptyTitle>No instrument matches</EmptyTitle>
+                  <EmptyTitle>No market matches “{query.trim()}”</EmptyTitle>
                   <EmptyDescription>
-                    Clear the filter or pick another exchange.
+                    Check the spelling, clear the search or pick another exchange.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
             ) : (
-              <div className="overflow-hidden panel rounded-tl-none bg-card">
+              <div className="overflow-hidden plate">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className={cn(HEAD, "pl-4")}>
-                        Instrument
+                      <TableHead className={cn(HEAD, "w-[22%] pl-4")}>
+                        Market
                       </TableHead>
-                      <TableHead className={NUM_HEAD}>Last</TableHead>
+                      <TableHead className={NUM_HEAD}>Price</TableHead>
                       <TableHead className={NUM_HEAD}>Change</TableHead>
                       <TableHead className={NUM_HEAD}>Change %</TableHead>
-                      <TableHead className={HEAD}>Day range</TableHead>
+                      <TableHead className={cn(HEAD, "pl-[calc(0.75rem+9ch+0.5rem)]")}>Day range</TableHead>
                       <TableHead className={NUM_HEAD}>Prev close</TableHead>
                       <TableHead className={NUM_HEAD}>Next expiry</TableHead>
                       <TableHead className={cn(NUM_HEAD, "pr-4")}>
-                        Lot
+                        Lot size
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -513,7 +503,7 @@ export function MarketsPage() {
                 </Table>
               </div>
             )}
-          </section>
+          </Section>
         </div>
       </div>
     </div>

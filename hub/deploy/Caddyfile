@@ -9,7 +9,7 @@
 # from the VPS itself only.
 
 feed.example.com {
-	@user path /ws /history /straddle_history /health /auth
+	@user path /ws /history /straddle_history /news /health /auth
 	handle @user {
 		reverse_proxy 127.0.0.1:8080
 	}

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
  */
 
 const TOOL =
-  "inline-flex h-8 min-w-8 shrink-0 whitespace-nowrap items-center justify-center gap-1 rounded-md px-1.5 text-sm font-normal text-soft outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 disabled:cursor-not-allowed aria-expanded:bg-accent aria-expanded:text-foreground data-[active=true]:bg-accent data-[active=true]:text-foreground active:translate-y-px"
+  "inline-flex h-8 min-w-8 shrink-0 whitespace-nowrap items-center justify-center gap-1 rounded-md px-1.5 text-sm font-normal text-soft outline-none transition-colors duration-150 hover:bg-selection hover:text-foreground disabled:pointer-events-none disabled:opacity-40 disabled:cursor-not-allowed aria-expanded:bg-selection aria-expanded:text-foreground data-[active=true]:bg-selection data-[active=true]:text-foreground active:translate-y-px"
 
 /** A flat button: an icon, a word, or both. `active` is the chosen one. */
 export function ToolButton({ active, className, ...props }: ComponentProps<"button"> & { active?: boolean }) {
@@ -64,14 +64,14 @@ export function Segmented<T extends string>({
 
   return (
     <ToggleGroup ref={track} type="single" spacing={0} value={value} onValueChange={(v) => v && onChange(v as T)} aria-label={label} className={cn("relative gap-0 rounded-lg bg-seg-track p-0.5", className)}>
-      {pill ? <span aria-hidden className="pointer-events-none absolute top-0.5 bottom-0.5 left-0 rounded-md bg-seg-pill shadow-sm transition-[transform,width] duration-300 ease-out motion-reduce:transition-none" style={{ transform: `translateX(${pill.x}px)`, width: pill.w }} /> : null}
+      {pill ? <span aria-hidden className="pointer-events-none absolute top-0.5 bottom-0.5 left-0 rounded-md bg-seg-pill shadow-control transition-[transform,width] duration-300 ease-out motion-reduce:transition-none" style={{ transform: `translateX(${pill.x}px)`, width: pill.w }} /> : null}
       {items.map((item) => (
         <ToggleGroupItem
           key={item.value}
           value={item.value}
           title={item.title}
           disabled={item.disabled}
-          className="relative h-7 min-w-0 rounded-md bg-transparent px-2.5 text-xs font-medium text-seg-text transition-colors duration-150 outline-none hover:text-seg-hover focus-visible:ring-1 focus-visible:ring-ring data-[state=on]:bg-transparent data-[state=on]:text-seg-active"
+          className="relative h-7 min-w-0 rounded-md bg-transparent px-2.5 text-xs text-seg-text transition-colors duration-150 outline-none hover:text-seg-hover focus-visible:ring-1 focus-visible:ring-ring data-[state=on]:bg-transparent data-[state=on]:text-seg-active"
         >
           {item.label}
         </ToggleGroupItem>

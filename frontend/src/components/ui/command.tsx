@@ -9,10 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  InputGroup,
-  InputGroupAddon,
-} from "@/components/ui/input-group"
 import { SearchIcon as MagnifyingGlassIcon, CheckIcon } from "@/components/icons"
 
 function Command({
@@ -50,7 +46,7 @@ function CommandDialog({
           palette threw and blanked the page. The title sits inside the content for screen readers. */}
       <DialogContent
         className={cn(
-          "top-[20%] translate-y-0 overflow-hidden rounded-lg p-0 sm:max-w-xl",
+          "top-[14%] translate-y-0 overflow-hidden rounded-xl bg-popover p-0 shadow-float ring-1 ring-separator-strong sm:max-w-[640px]",
           className
         )}
         showCloseButton={showCloseButton}
@@ -67,23 +63,21 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  aside,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input>) {
+}: React.ComponentProps<typeof CommandPrimitive.Input> & { aside?: React.ReactNode }) {
   return (
-    <div data-slot="command-input-wrapper" className="border-b pb-0">
-      <InputGroup className="h-12 rounded-none border-none bg-transparent shadow-none! *:data-[slot=input-group-addon]:pl-4!">
-        <CommandPrimitive.Input
-          data-slot="command-input"
-          className={cn(
-            "w-full text-sm outline-hidden placeholder:text-subtle disabled:cursor-not-allowed disabled:opacity-50",
-            className
-          )}
-          {...props}
-        />
-        <InputGroupAddon>
-          <MagnifyingGlassIcon className="size-4 shrink-0 text-subtle" />
-        </InputGroupAddon>
-      </InputGroup>
+    <div data-slot="command-input-wrapper" className="flex h-14 items-center gap-3 border-b px-4">
+      <MagnifyingGlassIcon className="size-[18px] shrink-0 text-subtle" />
+      <CommandPrimitive.Input
+        data-slot="command-input"
+        className={cn(
+          "h-full min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-hidden placeholder:text-subtle disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+        {...props}
+      />
+      {aside}
     </div>
   )
 }
@@ -96,7 +90,7 @@ function CommandList({
     <CommandPrimitive.List
       data-slot="command-list"
       className={cn(
-        "max-h-[min(60vh,420px)] scroll-py-1 overflow-x-hidden overflow-y-auto p-1 outline-none",
+        "max-h-[min(60vh,440px)] scroll-py-2 overflow-x-hidden overflow-y-auto p-2 outline-none",
         className
       )}
       {...props}
@@ -125,7 +119,7 @@ function CommandGroup({
     <CommandPrimitive.Group
       data-slot="command-group"
       className={cn(
-        "overflow-hidden text-foreground **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:pt-2.5 **:[[cmdk-group-heading]]:pb-1 **:[[cmdk-group-heading]]:text-xs **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-subtle",
+        "overflow-hidden text-foreground **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:pt-2 **:[[cmdk-group-heading]]:pb-1.5 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:leading-[14px] **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:text-muted-foreground",
         className
       )}
       {...props}
@@ -155,7 +149,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex cursor-default items-center gap-2 rounded-md px-3 py-2 text-[13px] outline-hidden select-none in-data-[slot=dialog-content]:rounded-md! data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-accent data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
+        "group/command-item relative flex cursor-default items-center gap-3 rounded-lg px-2 py-2 text-[13px] outline-hidden select-none transition-colors duration-100 in-data-[slot=dialog-content]:rounded-lg! data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-selection data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
         className
       )}
       {...props}

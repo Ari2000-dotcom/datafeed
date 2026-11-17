@@ -27,8 +27,8 @@ export function SessionChart({
   /** The live price: the latest bar closes on it. */
   last?: number
   prevClose: number | null
-  /** The whole chart's height in pixels, time axis included. */
-  height?: number
+  /** The whole chart's height in pixels, time axis included; "fill" takes its parent's height. */
+  height?: number | "fill"
   className?: string
 }) {
   const { host, chart, colors } = useChart({ still: true })
@@ -95,22 +95,30 @@ export function SessionChart({
       },
     })
     series.setData(data)
+    // The previous close as a flat dotted series, not a price line: a series' tag takes its place on
+    // the axis, so the ladder's ticks give way to it instead of printing underneath.
     const reference =
       prevClose !== null
-        ? chart.addPriceLine({
-            id: "prev-close",
-            price: prevClose,
-            color: colors.muted,
-            lineStyle: "dotted",
-            label: fmt2(prevClose),
+        ? chart.addSeries("line", {
+            priceScaleId: "right",
+            paneIndex: 0,
+            priceFormat: { type: "custom", formatter: fmt2 },
+            style: {
+              color: colors.muted,
+              lineWidth: 1,
+              lineStyle: "dotted",
+              lastValueVisible: true,
+              priceLineVisible: false,
+            },
           })
         : null
+    reference?.setData(data.map((p) => ({ time: p.time, value: prevClose! })))
     chart.setVisibleLogicalRange({
       from: -0.5,
       to: data.length - 0.5 + slotsLeft,
     })
     return () => {
-      if (reference) chart.removePrimitive(reference)
+      reference?.remove()
       series.remove()
     }
   }, [chart, colors, data, base, prevClose, slotsLeft])
@@ -122,13 +130,13 @@ export function SessionChart({
           "flex items-center justify-center rounded-md border border-dashed type-meta",
           className
         )}
-        style={{ height }}
+        style={{ height: height === "fill" ? "100%" : height }}
       >
-        No intraday history for this session
+        No chart for this session yet
       </div>
     )
 
   return (
-    <div ref={host} className={cn("w-full", className)} style={{ height }} />
+    <div ref={host} className={cn("w-full", className)} style={{ height: height === "fill" ? "100%" : height }} />
   )
 }

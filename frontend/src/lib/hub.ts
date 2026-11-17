@@ -73,6 +73,8 @@ export class Hub {
   private subQ = new Set<string>()
   private unsubQ = new Set<string>()
   private flushQueued = false
+  /** Topics the hub refused (its per-connection topic limit), and when each is asked for again. */
+  private readonly refused = new Map<string, { attempt: number; timer: ReturnType<typeof setTimeout> }>()
   private dirty = new Set<string>()
   private frame = 0
 
@@ -155,6 +157,7 @@ export class Hub {
    * fresh `sub`, so a listener joining a topic already held makes the hub send it again.
    */
   listen(topic: string, fn: (msg: TopicMessage) => void): () => void {
+    this.flushQueue()
     let set = this.feeds.get(topic)
     if (!set) {
       set = new Set()
@@ -185,13 +188,13 @@ export class Hub {
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       if (this.status !== "open") {
-        reject(new Error("Not connected to the feed yet."))
+        reject(new Error("Connecting to live prices. Try again in a moment."))
         return
       }
       const req = `r${this.nextReq++}`
       const timer = setTimeout(() => {
         this.pending.delete(req)
-        reject(new Error("The feed did not answer in time."))
+        reject(new Error("This is taking longer than usual. Please try again."))
       }, timeoutMs)
       this.pending.set(req, {
         resolve: resolve as (v: never) => void,
@@ -225,7 +228,7 @@ export class Hub {
       this.ws = null
       for (const [req, p] of this.pending) {
         clearTimeout(p.timer)
-        p.reject(new Error("Lost the connection to the feed. Try again."))
+        p.reject(new Error("Connection lost. Please try again."))
         this.pending.delete(req)
       }
       // Full jitter: after a hub restart the tabs come back spread over the ceiling, not in one second.
@@ -262,7 +265,7 @@ export class Hub {
         this.pending.delete(req)
         if (msg.t === "err")
           p.reject(
-            new Error(String(msg.error ?? "The feed refused the request."))
+            new Error("This data is not available right now.")
           )
         else p.resolve(msg as never)
         return
@@ -291,9 +294,50 @@ export class Hub {
       })
       this.dirty.add(id)
       if (!this.frame) this.frame = requestAnimationFrame(this.flushDirty)
+    } else if (msg.t === "err" && typeof topic === "string") {
+      this.onRefused(topic)
     } else if (typeof topic === "string") {
+      if (msg.t === "subscribed") this.clearRefused(topic)
       for (const fn of this.feeds.get(topic) ?? []) fn(msg as TopicMessage)
     }
+  }
+
+  /**
+   * The hub refused a topic, almost always for its per-connection topic limit: leaving the option
+   * chain keeps its prices for LINGER_MS, and a straddle opened in that window was turned away and
+   * then waited for good. Let the lingering prices go at once to make room, and ask again with a
+   * short backoff for as long as something still wants the topic.
+   */
+  private onRefused(topic: string): void {
+    for (const [id, timer] of this.lingering) {
+      clearTimeout(timer)
+      this.lingering.delete(id)
+      this.active.delete(id)
+      this.quotes.delete(id)
+      this.queue("unsub", id)
+    }
+    const prev = this.refused.get(topic)
+    if (prev) clearTimeout(prev.timer)
+    const attempt = (prev?.attempt ?? 0) + 1
+    const wait = Math.min(10_000, 250 * 2 ** (attempt - 1))
+    const timer = setTimeout(() => {
+      const wanted = topic.startsWith(QUOTE_PREFIX)
+        ? this.active.has(topic.slice(QUOTE_PREFIX.length))
+        : this.feeds.has(topic)
+      if (!wanted) {
+        this.refused.delete(topic)
+        return
+      }
+      this.send({ op: "sub", topics: [topic] })
+    }, wait)
+    this.refused.set(topic, { attempt, timer })
+  }
+
+  private clearRefused(topic: string): void {
+    const r = this.refused.get(topic)
+    if (!r) return
+    clearTimeout(r.timer)
+    this.refused.delete(topic)
   }
 
   private flushDirty = (): void => {
@@ -313,8 +357,13 @@ export class Hub {
     }
     if (this.flushQueued) return
     this.flushQueued = true
-    queueMicrotask(() => {
-      this.flushQueued = false
+    queueMicrotask(() => this.flushQueue())
+  }
+
+  /** Sends the queued unsubs, then the queued subs. Also run before a feed's own `sub`, so it never overtakes them. */
+  private flushQueue(): void {
+    this.flushQueued = false
+    {
       if (this.unsubQ.size > 0)
         this.send({
           op: "unsub",
@@ -327,7 +376,7 @@ export class Hub {
         })
       this.unsubQ = new Set()
       this.subQ = new Set()
-    })
+    }
   }
 
   private send(op: Record<string, unknown>): void {

@@ -55,15 +55,15 @@ export function useOiProfile(underlying: string | undefined, expiry: string | un
             const put = num(r.put[i])
             return { strike, call, put, callChange: call - num(r.call_prev[i]), putChange: put - num(r.put_prev[i]) }
           })
-          if (rows.length === 0) throw new Error("The feed sent an empty profile.")
+          if (rows.length === 0) throw new Error("No open interest for this expiry yet.")
           kept.set(key, { rows, at: r.at })
           setState({ key, rows, at: r.at })
           setError(null)
           timer = setTimeout(ask, REFRESH_MS)
         },
-        (e: unknown) => {
+        () => {
           if (cancelled) return
-          setError(e instanceof Error ? e.message : "Could not load open interest.")
+          setError("Open interest unavailable")
           timer = setTimeout(ask, RETRY_MS)
         },
       )

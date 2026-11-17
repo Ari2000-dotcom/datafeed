@@ -73,8 +73,8 @@ export interface MarketGroup {
 }
 
 export const GROUPS: readonly MarketGroup[] = [
-  { key: "index", title: "Index options", note: "NSE and BSE, cash settled" },
-  { key: "commodity", title: "Commodity options", note: "MCX, on the future" },
+  { key: "index", title: "Indices", note: "NSE and BSE" },
+  { key: "commodity", title: "Commodities", note: "MCX" },
 ]
 
 export const groupOf = (id: string): MarketGroup["key"] => (id.startsWith("mcx:") ? "commodity" : "index")

@@ -236,11 +236,11 @@ function SessionTimeline({
 }) {
   const open = infos.filter((i) => i.state === "open").length
   return (
-    <div className="flex flex-col gap-4 border-b px-5 pt-5 pb-4">
+    <div className="flex flex-col gap-4 border-b px-4 pt-4 pb-4">
       <div className="flex flex-col gap-1">
-        <span className="text-[14px] font-medium">Trading hours, in IST</span>
+        <span data-card-title className="text-[14px]">Global sessions</span>
         <div className="flex min-h-8 items-baseline gap-3">
-          <span className="num text-[26px] leading-8 font-medium tracking-[-0.015em]">
+          <span className="num type-display">
             {open} <span className="text-subtle">of {infos.length}</span>
           </span>
           <span className="text-[14px] text-muted-foreground">open now</span>
@@ -348,8 +348,8 @@ function GlobalPrice({ name, digits = 2 }: { name: string; digits?: number }) {
 function VenueRow({ info }: { info: VenueInfo }) {
   return (
     <div
-      className="grid h-[52px] grid-cols-[minmax(0,1fr)_minmax(88px,auto)_minmax(96px,auto)] items-center gap-3 border-b px-5 last:border-b-0"
-      title={`${info.v.index}: ${info.hours}. Price from Upstox, refreshed every ${every(info.v.every)}. Exchange holidays are not shown.`}
+      className="grid h-[52px] grid-cols-[minmax(0,1fr)_minmax(88px,auto)_minmax(96px,auto)] items-center gap-3 border-b px-4 last:border-b-0"
+      title={`${info.v.index} trades ${info.hours}. Price updates every ${every(info.v.every)}. Exchange holidays are not shown.`}
     >
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-[13px] text-soft">{info.v.index}</span>
@@ -372,7 +372,7 @@ function VenueRow({ info }: { info: VenueInfo }) {
 const CUES = [
   { name: "usdinr", label: "USD INR", digits: 4 },
   { name: "brent", label: "Brent", digits: 2 },
-  { name: "wti", label: "WTI crude", digits: 2 },
+  { name: "wti", label: "WTI", digits: 2 },
 ] as const
 
 function Cues() {
@@ -381,8 +381,8 @@ function Cues() {
       {CUES.map((c) => (
         <div
           key={c.name}
-          className="flex min-w-0 items-start justify-between gap-2 bg-card px-5 py-3"
-          title={`${c.label}: from Upstox, refreshed every 20 s`}
+          className="flex min-w-0 items-start justify-between gap-2 bg-card px-4 py-3"
+          title={`${c.label}, updates every 20 s`}
         >
           <span className="truncate pt-px type-meta">{c.label}</span>
           <GlobalPrice name={c.name} digits={c.digits} />
@@ -410,9 +410,9 @@ export function WorldMarkets() {
   return (
     <div className="flex h-full flex-col bg-card">
       <SessionTimeline infos={infos} istNow={istNow} />
-      <div className="panel-head grid h-8 grid-cols-[minmax(0,1fr)_minmax(88px,auto)_minmax(96px,auto)] items-center gap-3 bg-card px-5 type-meta">
-        <span>Name, local time</span>
-        <span className="text-right">Last</span>
+      <div className="panel-head grid h-8 grid-cols-[minmax(0,1fr)_minmax(88px,auto)_minmax(96px,auto)] items-center gap-3 bg-card px-4 type-colhead">
+        <span>Market</span>
+        <span className="text-right">Price</span>
         <span className="text-right">Status</span>
       </div>
       <div className="flex-1">

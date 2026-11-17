@@ -39,7 +39,7 @@ export const INDIA_ITEMS: readonly OverviewItem[] = FEATURED.map((f) => ({
 export const commodityItems = (list: readonly Underlying[]): OverviewItem[] =>
   list.map((u) => {
     const name = instrumentName(u.id, u.name)
-    return { id: u.id, label: name, name, venue: "Futures", underlying: u }
+    return { id: u.id, label: name, name, venue: "MCX", underlying: u }
   })
 
 /** The id whose quote and history stand for an item. Null while a commodity's front future is looked up. */
@@ -119,7 +119,7 @@ function Focus({ item }: { item: OverviewItem }) {
   const flash = useTickFlash<HTMLSpanElement>(day.quote?.ltp)
 
   return (
-    <div className="flex min-w-0 flex-col gap-4 border-b px-5 pt-5 pb-4">
+    <div className="flex min-w-0 flex-1 flex-col gap-4 border-b px-4 pt-4 pb-4">
       <div className="flex items-start gap-4">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex items-baseline gap-2">
@@ -133,7 +133,7 @@ function Focus({ item }: { item: OverviewItem }) {
               <>
                 <span
                   ref={flash}
-                  className="rounded-sm num text-[26px] leading-8 font-medium tracking-[-0.015em]"
+                  className="rounded-sm num type-display"
                 >
                   {fmt2(day.quote.ltp)}
                 </span>
@@ -147,7 +147,7 @@ function Focus({ item }: { item: OverviewItem }) {
                 ) : null}
               </>
             ) : waited ? (
-              <span className="text-[26px] leading-8 text-subtle">-</span>
+              <span className="type-display text-subtle">-</span>
             ) : (
               <Skeleton className="h-8 w-48" />
             )}
@@ -169,19 +169,22 @@ function Focus({ item }: { item: OverviewItem }) {
         <Figure label="Prev close" value={day.prevClose} />
       </div>
 
-      {day.ready ? (
-        <SessionChart
-          key={item.id}
-          id={item.id}
-          bars={day.bars}
-          last={day.quote?.ltp}
-          prevClose={day.prevClose}
-        />
-      ) : waited ? (
-        <SessionChart id={item.id} bars={[]} prevClose={null} />
-      ) : (
-        <Skeleton className="h-[190px] w-full" />
-      )}
+      <div className="h-[190px] lg:h-auto lg:min-h-[190px] lg:flex-1">
+        {day.ready ? (
+          <SessionChart
+            key={item.id}
+            id={item.id}
+            bars={day.bars}
+            last={day.quote?.ltp}
+            prevClose={day.prevClose}
+            height="fill"
+          />
+        ) : waited ? (
+          <SessionChart id={item.id} bars={[]} prevClose={null} height="fill" />
+        ) : (
+          <Skeleton className="h-full w-full" />
+        )}
+      </div>
     </div>
   )
 }
@@ -211,14 +214,14 @@ function Row({
       onDoubleClick={() => navigate(hrefOf.charts(item.id))}
       title={`${item.name}. Double-click to open the chart.`}
       className={cn(
-        "relative grid h-11 w-full grid-cols-[minmax(0,1fr)_auto_64px] items-center gap-3 border-b px-5 text-left transition-colors outline-none last:border-b-0 focus-visible:bg-muted/60 sm:grid-cols-[minmax(0,1fr)_64px_minmax(92px,auto)_64px]",
-        selected ? "bg-muted" : "hover:bg-muted/50"
+        "relative grid h-11 w-full grid-cols-[minmax(0,1fr)_auto_64px] items-center gap-3 border-b px-4 text-left transition-colors outline-none last:border-b-0 focus-visible:bg-muted/60 sm:grid-cols-[minmax(0,1fr)_64px_minmax(92px,auto)_64px]",
+        selected ? "bg-selection" : "hover:bg-zebra"
       )}
     >
       {selected ? (
         <span
           aria-hidden
-          className="absolute inset-y-0 left-0 w-0.5 bg-foreground"
+          className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-primary"
         />
       ) : null}
       <span className="flex min-w-0 items-baseline gap-2">
@@ -297,16 +300,16 @@ export function OverviewPanel({
       {focus && !loading ? (
         <Focus item={focus} />
       ) : (
-        <div className="flex flex-col gap-4 border-b p-5">
+        <div className="flex flex-col gap-4 border-b p-4">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-[200px] w-full" />
         </div>
       )}
-      <div className="panel-head grid h-8 grid-cols-[minmax(0,1fr)_auto_64px] items-center gap-3 bg-card px-5 type-meta sm:grid-cols-[minmax(0,1fr)_64px_minmax(92px,auto)_64px]">
-        <span>Name</span>
+      <div className="panel-head grid h-8 grid-cols-[minmax(0,1fr)_auto_64px] items-center gap-3 bg-card px-4 type-colhead sm:grid-cols-[minmax(0,1fr)_64px_minmax(92px,auto)_64px]">
+        <span>Market</span>
         <span className="hidden text-center sm:inline">Today</span>
-        <span className="text-right">Last</span>
+        <span className="text-right">Price</span>
         <span className="text-right">Change</span>
       </div>
       <div
@@ -319,7 +322,7 @@ export function OverviewPanel({
           ? Array.from({ length: 6 }, (_, i) => (
               <div
                 key={i}
-                className="flex h-11 items-center gap-3 border-b px-5 last:border-b-0"
+                className="flex h-11 items-center gap-3 border-b px-4 last:border-b-0"
               >
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="ml-auto h-4 w-20" />

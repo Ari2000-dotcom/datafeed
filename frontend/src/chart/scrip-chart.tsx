@@ -55,7 +55,7 @@ const MODES: readonly { value: ProfileMode | "off"; label: string; hint: string;
   { value: "off", label: "Off", hint: "Price only", icon: () => <EyeOffIcon /> },
   { value: "oi", label: "Open interest", hint: "Each strike's call and put OI", icon: () => <OiTotalIcon /> },
   { value: "change", label: "OI change", hint: "Since the last settle; shed OI is an outline", icon: () => <OiChangeIcon /> },
-  { value: "delta", label: "Delta × OI", hint: "Exposure to the underlying, strike by strike", icon: () => <DeltaOiIcon /> },
+  { value: "delta", label: "Delta × OI", hint: "Delta-weighted open interest, strike by strike", icon: () => <DeltaOiIcon /> },
 ]
 
 const SCALES: readonly { value: PriceScaleMode; short: string; label: string; hint: string }[] = [
@@ -479,7 +479,7 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
             { text: "Calls", color: colors.oiCall },
             { text: "Puts", color: colors.oiPut },
             ...(at ? [{ label: "as of", text: istClock(at > 1e12 ? at : at * 1000), color: colors.muted }] : []),
-            ...(waitingDelta ? [{ text: "waiting for the forward and vol", color: colors.muted }] : []),
+            ...(waitingDelta ? [{ text: "calculating", color: colors.muted }] : []),
             ...(oiError && !rows ? [{ text: oiError, color: colors.down }] : []),
             ...(lot > 0 ? [{ label: "lot", text: fmt0(lot), color: colors.muted }] : []),
           ],
@@ -495,7 +495,7 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
       active={active}
       onActivate={onActivate}
       host={host}
-      state={error && !candles ? { kind: "message", title: "Could not load candles", description: error } : loading && !candles ? { kind: "loading" } : candles && candles.length === 0 ? { kind: "message", title: "No candles for this range", description: "The exchange sent none for this instrument and interval." } : undefined}
+      state={error && !candles ? { kind: "message", title: "Chart data unavailable", description: error } : loading && !candles ? { kind: "loading" } : candles && candles.length === 0 ? { kind: "message", title: "No prices for this period", description: "Try a different interval or date range." } : undefined}
       toolbar={
         <>
           {pickers}
@@ -569,7 +569,7 @@ export function ScripChart({ id, name, refId, underlying, expiry, lot, active, o
           </DropdownMenu>
 
           <DropdownMenu>
-            <Tip label={expiry ? `OI profile: ${mode.label}` : "This underlying lists no upcoming expiry"}>
+            <Tip label={expiry ? `OI profile: ${mode.label}` : "This market has no upcoming expiry"}>
               <DropdownMenuTrigger asChild>
                 <ToolButton aria-label="OI profile" disabled={!expiry} active={profileOn} className="pr-1">
                   {mode.icon()}

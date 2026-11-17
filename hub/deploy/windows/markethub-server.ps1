@@ -101,7 +101,7 @@ if (-not $up) { Fail "MarketHub did not start; see $log" }
 Ok "MarketHub is running ($api)"
 
 # ---------- 2b. Website + HTTPS (Caddy), once domain.txt names the DuckDNS address ----------
-# Caddy serves the web app from web\ and passes /ws, /auth, /history, /straddle_history and /health
+# Caddy serves the web app from web\ and passes /ws, /auth, /history, /straddle_history, /news and /health
 # to MarketHub; it gets and renews the HTTPS certificate by itself. MarketHub
 # itself stays on 127.0.0.1, reachable only through Caddy.
 $domainFile = Join-Path $root 'domain.txt'
@@ -131,7 +131,7 @@ if (-not $domain) {
     $conf = @"
 $domain {
 	encode zstd gzip
-	@hub path /ws /history /straddle_history /health /auth
+	@hub path /ws /history /straddle_history /news /health /auth
 	handle @hub {
 		reverse_proxy 127.0.0.1:$hubPort
 	}
@@ -142,7 +142,12 @@ $domain {
 		file_server
 	}
 }
+
+# Other sites on this VPS (another program's domain): one .caddy file each in caddy\sites\,
+# so this Caddy serves them too and they are never overwritten when this file is rewritten.
+import "$($caddyDir.Replace([string][char]92, '/'))/sites/*.caddy"
 "@
+    New-Item -ItemType Directory -Force (Join-Path $caddyDir 'sites') | Out-Null
     $caddyfile = Join-Path $caddyDir 'Caddyfile'
     $changed = -not (Test-Path $caddyfile) -or ((Get-Content $caddyfile -Raw).Trim() -ne $conf.Trim())
     if ($changed) { [IO.File]::WriteAllText($caddyfile, $conf) }
@@ -164,6 +169,8 @@ $domain {
         Stop-ScheduledTask -TaskName 'MarketHub Web'
         Start-Sleep -Seconds 1
     }
+    # A disabled task (switched off by hand, or by a Windows cleanup) would refuse to start: enable it first.
+    if ((Get-ScheduledTask -TaskName 'MarketHub Web').State -eq 'Disabled') { Enable-ScheduledTask -TaskName 'MarketHub Web' | Out-Null }
     if ((Get-ScheduledTask -TaskName 'MarketHub Web').State -ne 'Running') { Start-ScheduledTask -TaskName 'MarketHub Web' }
 
     # The first start gets the certificate (10-60 s); then the site answers over HTTPS.

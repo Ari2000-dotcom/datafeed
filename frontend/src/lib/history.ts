@@ -61,8 +61,8 @@ async function fetchCandles(
     if (!res.ok)
       throw new Error(
         res.status === 429
-          ? "History limit reached. Try again in a moment."
-          : `History is unavailable (HTTP ${res.status}).`
+          ? "Loading is busy. Please wait a moment."
+          : "Chart data is not available right now."
       )
     const body = (await res.json()) as { pieces?: { candles?: number[][] }[] }
     const out: Candle[] = []
